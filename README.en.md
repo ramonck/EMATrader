@@ -24,6 +24,16 @@ To build and publish a version, open **Actions → Compilar EMA Trader → Run w
 **Find an asset.** Type `BTC` or `NVDA` into **Find asset**. The list filters the Lighter catalog’s symbols. Press **Enter** to select the first result.
 
 
+## Support the project
+
+Enjoy EMA Trader and want to support the project? Send **native USDC** on **Arbitrum One** to this address:
+
+```text
+0x0FcbBFe9F4E39816799857E35887876B1d869929
+```
+
+Check the network and token in your wallet before sending.
+
 ## Security and verification
 
 The local vault encrypts the Lighter key, account profile and private trading history. Open **Settings → Orders → Unlock vault**. Releases provide build attestations and SHA256 digests. [Vault and migration](knowledge/en/DATA.md) · [Verify a download](knowledge/en/RELEASE.md)

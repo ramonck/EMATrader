@@ -24,6 +24,16 @@ Para compilar y publicar una versión, abre **Actions → Compilar EMA Trader �
 **Buscar un activo.** Escribe `BTC` o `NVDA` en **Buscar activo**. La lista filtra los códigos del catálogo de Lighter. Pulsa **Enter** para seleccionar el primer resultado.
 
 
+## Apoya el proyecto
+
+¿Te gusta EMA Trader y quieres apoyar el proyecto? Envía **USDC nativo** por la red **Arbitrum One** a esta dirección:
+
+```text
+0x0FcbBFe9F4E39816799857E35887876B1d869929
+```
+
+Comprueba la red y el token en tu billetera antes de enviar.
+
 ## Seguridad y verificación
 
 La bóveda local cifra la clave de Lighter, el perfil de cuenta y el historial privado. Abre **Configuración → Órdenes → Desbloquear bóveda**. Las Releases incluyen atestaciones de procedencia y SHA256. [Bóveda y migración](knowledge/es/DATA.md) · [Verificar una descarga](knowledge/es/RELEASE.md)
