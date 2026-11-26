@@ -1,6 +1,8 @@
 """EMA Trader entry point. The CLI and desktop share the same monitor."""
 
 import argparse
+import getpass
+import json
 import os
 import sys
 import time
@@ -14,6 +16,7 @@ from i18n import LANGUAGES, tr, translate_error
 from knowledge import knowledge_rule
 from local_mcp import LocalMCP
 from storage import data_root, read, write
+from vault import METADATA, Vault, VaultError
 
 def label(side, language):
     return "Long" if side > 0 else "Short" if side < 0 else tr(language, "Zerado")
@@ -45,6 +48,20 @@ def cli(args):
         mcp.stop()
 
 
+def terminal_vault(language):
+    root = data_root()
+    passphrase = os.environ.get("EMA_TRADER_VAULT_PASSPHRASE")
+    if passphrase is None:
+        if not sys.stdin.isatty():
+            raise VaultError("Abra um terminal interativo ou defina EMA_TRADER_VAULT_PASSPHRASE.")
+        passphrase = getpass.getpass(tr(language, "Frase secreta do cofre") + " ")
+        if not (root / METADATA).exists():
+            confirm = getpass.getpass(tr(language, "Repita a frase secreta") + " ")
+            if passphrase != confirm:
+                raise VaultError("As frases secretas não coincidem.")
+    return Vault.open(root, passphrase)
+
+
 def run_cli(args, monitor, mcp):
     language = args.lang or "pt"
     if args.account is not None:
@@ -52,8 +69,20 @@ def run_cli(args, monitor, mcp):
     if args.trade:
         if args.account is None or (args.network == "mainnet" and not args.confirm_mainnet):
             raise ValueError("Informe --account; para ordens reais, também --confirm-mainnet.")
-        monitor.arm(credentials(args.symbol, args.network, args.account, os.environ.get("LIGHTER_API_KEY"),
-                                args.key_index, args.margin, args.leverage, args.drawdown))
+        vault = terminal_vault(language)
+        path = vault.root / "profiles" / (symbol_key(args.profile.upper()) + ".json")
+        saved = vault.read(path, {})
+        identity = {"network": args.network, "account": args.account, "key_index": args.key_index}
+        key = os.environ.get("LIGHTER_API_KEY")
+        if not key and all(saved.get(field) == value for field, value in identity.items()):
+            key = saved.get("key")
+        if not key and args.save_key and sys.stdin.isatty():
+            key = getpass.getpass(tr(language, "Chave privada") + " ")
+        config = credentials(args.symbol, args.network, args.account, key, args.key_index,
+                             args.margin, args.leverage, args.drawdown)
+        def save():
+            vault.write(path, dict(saved, **identity, key=key))
+        monitor.arm(dict(config, vault=vault), on_ready=save if args.save_key else None)
     while True:
         candles, points, orders, errors = monitor.snapshot(args.symbol)
         if mcp.port:
@@ -79,11 +108,13 @@ def run_cli(args, monitor, mcp):
 
 def gui(profile="DEFAULT", language=None):
     import tkinter as tk
-    from tkinter import messagebox, ttk
+    from tkinter import messagebox, simpledialog, ttk
     import webbrowser
 
     profile = symbol_key(profile.upper())
-    preferences_path = data_root() / "profiles" / (profile + ".json")
+    root_path = data_root()
+    preferences_path = root_path / "ui-profiles" / (profile + ".json")
+    private_path = root_path / "profiles" / (profile + ".json")
     root = tk.Tk()
     root.title("EMA Trader")
     root.geometry("1024x700")
@@ -95,19 +126,53 @@ def gui(profile="DEFAULT", language=None):
     mcp = LocalMCP()
     worker = ThreadPoolExecutor(max_workers=1)
     prefs = read(preferences_path, {})
-    language = language or prefs.get("language", "pt")
+    requested_language = language
+    language = requested_language or prefs.get("language", "pt")
+    vault = None
+    private = {}
 
     def t(message, **values):
         return tr(language, message, **values)
 
+    def unlock(parent, interactive=True):
+        nonlocal vault, private
+        if vault is not None:
+            return True
+        try:
+            secret = os.environ.get("EMA_TRADER_VAULT_PASSPHRASE")
+            if secret is None:
+                if not interactive:
+                    return False
+                secret = simpledialog.askstring(t("Cofre local"), t("Frase secreta do cofre"), show="*", parent=parent)
+                if secret is None:
+                    return False
+                if not (root_path / METADATA).exists():
+                    confirm = simpledialog.askstring(t("Cofre local"), t("Repita a frase secreta"), show="*", parent=parent)
+                    if confirm is None:
+                        return False
+                    if confirm != secret:
+                        raise VaultError("As frases secretas não coincidem.")
+            candidate = Vault.open(root_path, secret)
+            private = candidate.read(private_path, {})
+            vault = candidate
+            return True
+        except (OSError, ValueError) as error:
+            messagebox.showerror(t("Cofre local"), translate_error(language, error), parent=parent)
+            return False
+
+    unlock(root, interactive=(root_path / METADATA).exists() or private_path.exists())
+    for field in ("symbol", "beep", "language", "mcp_port"):
+        if field in private:
+            prefs.setdefault(field, private[field])
+    language = requested_language or prefs.get("language", "pt")
     localized = []
 
     def localize(widget, message):
         localized.append((widget, message))
         widget.configure(text=t(message))
         return widget
-    if "account" in prefs:
-        monitor.account = prefs["network"], prefs["account"]
+    if "account" in private:
+        monitor.account = private["network"], private["account"]
     selected = tk.StringVar(value=prefs.get("symbol", "BTC"))
     beep = tk.BooleanVar(value=prefs.get("beep", True))
     banner = tk.StringVar(value=t("Aguardando candles fechados de 15 min"))
@@ -384,11 +449,24 @@ def gui(profile="DEFAULT", language=None):
                         command=save_beep).grid(row=4, columnspan=2, sticky="w", pady=6)
         ttk.Button(general, text=t("Pasta de históricos"), command=lambda: webbrowser.open(data_root().as_uri())).grid(row=5, column=0, pady=6)
         ttk.Button(general, text=t("Subcontas"), command=show_subaccounts).grid(row=5, column=1, pady=6)
+
+        def unlock_settings():
+            if unlock(win):
+                if "account" in private:
+                    monitor.account = private["network"], private["account"]
+                if "symbol" not in prefs and private.get("symbol"):
+                    selected.set(private["symbol"])
+                win.destroy()
+                settings()
+                refresh()
+
+        if vault is None:
+            ttk.Button(form, text=t("Desbloquear cofre"), command=unlock_settings).grid(row=8, columnspan=2, pady=6)
         values = {}
-        for i, (name, default) in enumerate((("Rede", prefs.get("network", "testnet")), ("Índice da conta", str(prefs.get("account", ""))),
-                ("Índice da chave", "3"), ("Chave privada", ""), ("Margem base USD", prefs.get("margin", "100")),
-                ("Alavancagem", str(prefs.get("leverage", 5))),
-                ("Limite de perda da conta (%)", prefs.get("drawdown", "25")))):
+        for i, (name, default) in enumerate((("Rede", private.get("network", "testnet")), ("Índice da conta", str(private.get("account", ""))),
+                ("Índice da chave", str(private.get("key_index", 3))), ("Chave privada", private.get("key", "")),
+                ("Margem base USD", private.get("margin", "100")), ("Alavancagem", str(private.get("leverage", 5))),
+                ("Limite de perda da conta (%)", private.get("drawdown", "25")))):
             ttk.Label(form, text=t(name)).grid(row=i, column=0, sticky="w", pady=4)
             var = tk.StringVar(value=default)
             values[name] = var
@@ -404,6 +482,8 @@ def gui(profile="DEFAULT", language=None):
                 idx = int(values["Índice da conta"].get())
                 if idx < 0:
                     raise ValueError("Índice inválido.")
+                if not unlock(win):
+                    return
                 config = credentials(symbol, network, idx, values["Chave privada"].get(), int(values["Índice da chave"].get()),
                                      Decimal(values["Margem base USD"].get()), int(values["Alavancagem"].get()),
                                      Decimal(values["Limite de perda da conta (%)"].get())) if trade else None
@@ -416,9 +496,21 @@ def gui(profile="DEFAULT", language=None):
             win.destroy()
 
             def configure():
+                old_identity = private.get("network"), private.get("account")
+                updated = dict(private, network=network, account=idx, symbol=symbol)
+                if config:
+                    updated.update({field: config[field] for field in ("margin", "leverage", "drawdown", "key_index", "key")})
+                elif old_identity != (network, idx):
+                    updated.pop("key", None)
+                    updated.pop("key_index", None)
+                def save():
+                    vault.write(private_path, updated)
+                    private.clear()
+                    private.update(updated)
                 if trade:
-                    monitor.arm(config)
+                    monitor.arm(dict(config, vault=vault), on_ready=save)
                 else:
+                    save()
                     if monitor.account != (network, idx):
                         monitor.position_rows = []
                         monitor.closed_at = 0
@@ -430,9 +522,7 @@ def gui(profile="DEFAULT", language=None):
                 return True
 
             def saved(_):
-                prefs.update(symbol=selected.get(), network=network, account=idx, beep=beep.get(), language=language)
-                if config:
-                    prefs.update(margin=config["margin"], leverage=config["leverage"], drawdown=config["drawdown"])
+                prefs.update(symbol=selected.get(), beep=beep.get(), language=language)
                 write(preferences_path, prefs)
                 render()
                 refresh()
@@ -472,6 +562,8 @@ def main():
     parser.add_argument("--drawdown", type=Decimal, default=Decimal("25"))
     parser.add_argument("--mcp-port", type=int, help=tr(language, "usar consulta local via MCP na porta indicada"))
     parser.add_argument("--trade", action="store_true")
+    parser.add_argument("--save-key", action="store_true", help=tr(language, "Salvar chave no cofre"))
+    parser.add_argument("--show-orders", action="store_true", help=tr(language, "Ler histórico privado de ordens"))
     parser.add_argument("--confirm-mainnet", action="store_true")
     parser.add_argument("--beep", action="store_true")
     parser.add_argument("--once", action="store_true")
@@ -481,7 +573,10 @@ def main():
         print(knowledge_rule(language, "SUBACCOUNTS"))
         return
     try:
-        if args.gui or sys.stdout is None:
+        if args.show_orders:
+            for order in terminal_vault(language).orders():
+                print(json.dumps(order, ensure_ascii=False))
+        elif args.gui or sys.stdout is None:
             gui(args.profile, args.lang)
         else:
             cli(args)

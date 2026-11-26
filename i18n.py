@@ -6,6 +6,25 @@ from string import Formatter
 LANGUAGES = {"pt": "Português", "en": "English", "es": "Español"}
 
 MESSAGES = {
+    "Cofre local": ("Local vault", "Bóveda local"),
+    "Desbloquear cofre": ("Unlock vault", "Desbloquear bóveda"),
+    "Frase secreta do cofre": ("Vault passphrase", "Frase secreta de la bóveda"),
+    "Repita a frase secreta": ("Repeat the passphrase", "Repite la frase secreta"),
+    "As frases secretas não coincidem.": ("Passphrases do not match.", "Las frases secretas no coinciden."),
+    "Salvar chave no cofre": ("Save key to vault", "Guardar clave en la bóveda"),
+    "Ler histórico privado de ordens": ("Read private order history", "Leer el historial privado de órdenes"),
+    "Desbloqueie o cofre para usar a conta da Lighter.": (
+        "Unlock the vault to use the Lighter account.", "Desbloquea la bóveda para usar la cuenta de Lighter."),
+    "Abra um terminal interativo ou defina EMA_TRADER_VAULT_PASSPHRASE.": (
+        "Use an interactive terminal or set EMA_TRADER_VAULT_PASSPHRASE.",
+        "Usa una terminal interactiva o define EMA_TRADER_VAULT_PASSPHRASE."),
+    "Use uma frase secreta de pelo menos 12 caracteres para o cofre.": (
+        "Use a vault passphrase of at least 12 characters.", "Usa una frase secreta de al menos 12 caracteres."),
+    "Metadados do cofre inválidos.": ("Invalid vault metadata.", "Metadatos de bóveda inválidos."),
+    "Frase secreta incorreta ou cofre danificado.": (
+        "Incorrect passphrase or damaged vault.", "Frase secreta incorrecta o bóveda dañada."),
+    "Registro privado inválido ou adulterado.": (
+        "Invalid or modified private record.", "Registro privado inválido o alterado."),
     "Buscar ativo": ("Find asset", "Buscar activo"),
     "Limite de perda da conta (%)": ("Account drawdown limit (%)", "Límite de caída de la cuenta (%)"),
     "Limite de perda da conta inválido.": ("Invalid account drawdown limit.", "Límite de caída de la cuenta inválido."),

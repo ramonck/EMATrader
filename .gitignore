@@ -13,3 +13,5 @@ assets/icon.png
 .env*
 *.pem
 *.key
+.vault.lock
+.orders.lock

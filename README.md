@@ -24,6 +24,11 @@ Para gerar e publicar uma versão, abra **Actions → Compilar EMA Trader → Ru
 **Busca de ativos.** Digite `BTC` ou `NVDA` no campo **Buscar ativo**. A lista filtra os códigos do catálogo da Lighter. Pressione **Enter** para selecionar o primeiro resultado.
 
 
+## Segurança e verificação
+
+O cofre local criptografa a chave da Lighter, o perfil da conta e o histórico privado. Abra **Configurações → Ordens → Desbloquear cofre**. As Releases trazem atestações de procedência e SHA256 dos pacotes. [Cofre e migração](knowledge/pt/DATA.md) · [Verificar download](knowledge/pt/RELEASE.md)
+
+
 ## Rodar a partir do código
 
 ```sh

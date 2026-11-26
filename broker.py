@@ -6,7 +6,8 @@ import sys
 import time
 from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 from pathlib import Path
-from storage import account_lock, data_root, read, write
+from storage import account_lock, data_root
+from vault import Vault
 
 NETWORKS = {
     "testnet": "https://testnet.zklighter.elliot.ai",
@@ -33,7 +34,8 @@ def account_risk(state_path, request, snapshot, rearm=False):
     if not equity.is_finite():
         raise BridgeError("Saldo total da conta indisponível.")
     path = state_path.parent / "risk" / f'{request["network"]}-{request["account"]}.json'
-    saved = state = read(path, {})
+    vault = request["vault"]
+    saved = state = vault.read(path, {})
     if rearm and state.get("halted"):
         if any(Decimal(row.position) for row in snapshot.positions):
             raise BridgeError("A conta continua pausada. Zere a posição antes de reiniciar o limite de perda.")
@@ -42,7 +44,7 @@ def account_risk(state_path, request, snapshot, rearm=False):
     halted = bool(state.get("halted")) or (peak > 0 and equity <= peak * (1 - percent / 100))
     updated = {"peak": str(peak), "halted": halted}
     if updated != saved:
-        write(path, updated)
+        vault.write(path, updated)
     return halted
 
 
@@ -69,7 +71,7 @@ def public_positions(snapshot):
             for row in snapshot.positions if Decimal(row.position) != 0]
 
 
-async def ensure_account_flat(sdk, client, account, auth, state_path):
+async def ensure_account_flat(sdk, client, account, auth, state_path, vault):
     snapshot = await account_snapshot(sdk, client, account)
     if any(Decimal(row.position) != 0 for row in snapshot.positions):
         raise BridgeError("A conta já tem posição aberta. Novas entradas estão bloqueadas.")
@@ -79,13 +81,9 @@ async def ensure_account_flat(sdk, client, account, auth, state_path):
     prefix = state_path.stem.split("-", 2)[:2]
     for journal in state_path.parent.glob("-".join(prefix) + "*.json"):
         name = journal.stem.split("-", 2)
-        if name[:2] == prefix and json.loads(journal.read_text(encoding="utf-8")).get("pending"):
+        if name[:2] == prefix and vault.read(journal).get("pending"):
             raise BridgeError("Há uma execução pendente no diário desta conta.")
     return snapshot
-
-
-def save_state(path, state):
-    write(path, state)
 
 
 def acknowledge(result, action):
@@ -132,6 +130,7 @@ async def market_depth_price(client, market_id, selling, quantity):
 
 
 async def execute(sdk, client, request, account, key_index, state_path, continue_rotation=False):
+    vault = request["vault"]
     result = await client.order_api.order_book_details()
     symbol = request.get("symbol", "BTC")
     command = request["command"]
@@ -145,12 +144,12 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
         raise BridgeError("Não foi possível autenticar a chave da Lighter.")
     snapshot = await account_snapshot(sdk, client, account)
     current, config = market_position(snapshot, market_id)
-    state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {"position": "0", "candle": -1}
+    state = vault.read(state_path, {"position": "0", "candle": -1})
     if command == "check":
         blocked = None
         if request.get("single_position") and not current:
             try:
-                await ensure_account_flat(sdk, client, account, auth, state_path)
+                await ensure_account_flat(sdk, client, account, auth, state_path, vault)
             except BridgeError as error:
                 blocked = str(error)
         return {"position": str(current), "market": market_id, "breakout_filter": True, "entry_room_filter": True,
@@ -160,7 +159,7 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
         if state.get("pending"):
             raise BridgeError("O diário tem uma ordem pendente para este mercado. Concilie antes de assumir a posição.")
         if not current:
-            await ensure_account_flat(sdk, client, account, auth, state_path)
+            await ensure_account_flat(sdk, client, account, auth, state_path, vault)
             if Decimal(state["position"]):
                 raise BridgeError("Estado da posição divergente ou ordem pendente. Confira a conta e o diário antes de retomar.")
         else:
@@ -169,7 +168,7 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
                 raise BridgeError("Há ordem ativa ou pendente neste mercado. Confira antes de assumir.")
             if Decimal(state["position"]) != current:
                 state.pop("reinvestment", None)
-                save_state(state_path, dict(state, position=str(current), adopted_at=int(time.time() * 1000)))
+                vault.write(state_path, dict(state, position=str(current), adopted_at=int(time.time() * 1000)))
         if request.get("drawdown") and account_risk(state_path, request, snapshot, rearm=True):
             raise BridgeError(RISK_HALT)
         return {"ready": True, "position": str(current), "market": market_id, "positions": public_positions(snapshot)}
@@ -219,7 +218,7 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
         return {"position": "0", "entry_skipped": "livro Lighter"}
     if not closing:
         if command == "rotate":
-            await ensure_account_flat(sdk, client, account, auth, state_path)
+            await ensure_account_flat(sdk, client, account, auth, state_path, vault)
         fraction = 10000 // leverage
         if fraction < market.min_initial_margin_fraction:
             raise BridgeError(f"Alavancagem acima do limite do mercado {symbol}.")
@@ -263,7 +262,7 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
                         Decimal(amount) / size_scale * quote < Decimal(market.min_quote_amount)):
         raise BridgeError("Quantidade abaixo do mínimo da Lighter.")
     if not closing and command == "rotate":
-        flat = await ensure_account_flat(sdk, client, account, auth, state_path)
+        flat = await ensure_account_flat(sdk, client, account, auth, state_path, vault)
         if compound:
             available = Decimal(flat.available_balance)
             if not available.is_finite() or available < margin:
@@ -273,7 +272,7 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
     limit = int(bound.to_integral_value(rounding=ROUND_CEILING if selling else ROUND_FLOOR))
     order_index = max(time.time_ns() // 1_000_000, int(state.get("last", {}).get("order", 0)) + 1)
     action = ("Fechar long" if current > 0 else "Fechar short") if closing else ("Abrir short" if selling else "Abrir long")
-    save_state(state_path, dict(state, position=str(current), candle=candle, pending=order_index, action=action))
+    vault.write(state_path, dict(state, position=str(current), candle=candle, pending=order_index, action=action))
     sent = acknowledge(await client.create_market_order(
         market_id, order_index, amount, limit, selling, reduce_only=closing, api_key_index=key_index), "ordem")
     for _ in range(12):
@@ -314,15 +313,12 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
         audit = dict(report, network=request["network"], candle=candle,
                      trigger="Account drawdown" if risk_halt else request.get("trigger"), margin_usd=str(margin),
                      leverage=leverage, account=account, symbol=symbol)
-        with (state_path.parent.parent / "operacoes-lighter.jsonl").open("a", encoding="utf-8") as file:
-            file.write(json.dumps(audit) + "\n")
-            file.flush()
-            os.fsync(file.fileno())
+        vault.append_order(audit)
         state.pop("pending", None)
         state.pop("action", None)
         if not compound:
             state.pop("reinvestment", None)
-        save_state(state_path, dict(state, position=str(after), candle=candle, last=report))
+        vault.write(state_path, dict(state, position=str(after), candle=candle, last=report))
         return report
     raise BridgeError("Execução não conciliada. O diário bloqueou outros envios até revisão da ordem.")
 
@@ -332,6 +328,8 @@ async def main(request):
     account = int(request["account"])
     key_index = int(request["key_index"])
     network = request["network"]
+    if not isinstance(request.get("vault"), Vault) or request["vault"].root != data_root().resolve():
+        raise BridgeError("Desbloqueie o cofre para usar a conta da Lighter.")
     symbol = request.get("symbol", "BTC")
     if not isinstance(symbol, str) or not symbol or len(symbol) > 32 or not all(c.isascii() and (c.isalnum() or c in "_-") for c in symbol):
         raise BridgeError("Símbolo Lighter inválido.")
@@ -395,6 +393,7 @@ async def connect(sdk, request, account, key_index, path):
 if __name__ == "__main__":
     try:
         request = json.load(sys.stdin)
+        request["vault"] = Vault.open(data_root(), os.environ.get("EMA_TRADER_VAULT_PASSPHRASE"))
         print(json.dumps(asyncio.run(asyncio.wait_for(main(request), 120 if request.get("command") == "rotate" else 55))))
     except BridgeError as error:
         print(json.dumps({"error": str(error)}))

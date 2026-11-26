@@ -3,6 +3,9 @@
 - `Lighter/risk/` stores the equity peak and drawdown pause by network and account. The market journal stores the balance reference and reinvestment margin. [ORDERS](ORDERS.md)
 - The selector shows active Lighter perpetual symbols. Its disk catalog is valid for seven days. Each asset and interval has a short shared candle cache and local lock.
 - `EMA_TRADER_DATA_DIR` overrides the root. Defaults: `%LOCALAPPDATA%/EMATrader` on Windows, `~/Library/Application Support/EMATrader` on macOS, and `$XDG_STATE_HOME/ema-trader` or `~/.local/state/ema-trader` on Linux.
-- `profiles/`: desktop preferences. `quotes/`: candle cache. `history/`: last signal per asset. `Lighter/`: journals and locks by network and account. `operacoes-lighter.jsonl`: reconciled executions.
-- The Lighter key comes from the session or environment. Preferences exclude it. Market feeds and monitoring use bounded windows. The OS manages swap.
-- Code `storage.py`, `engine.markets`, `engine.shared_fetch` and `broker.main`.
+- `profiles/` / `ui-profiles/`: desktop preferences. `quotes/`: candle cache. `history/`: last signal per asset. `Lighter/`: journals and locks by network and account. `operacoes-lighter.jsonl`: reconciled executions.
+- Lighter keys, account profiles and private records on disk are encrypted with AES-256-GCM. Scrypt derives the vault key from the passphrase. Each record authenticates its file path. Recovering the vault requires the passphrase.
+- On first unlock, the app migrates legacy profiles, journals, drawdown state and order logs. Close older instances before upgrading. Migration replaces active files. Protect old backups and external copies separately.
+- In the window, use Settings → Orders → Unlock vault. The validated key is saved to the encrypted account profile. In the CLI, `--trade --save-key` saves a key after validation. `--show-orders` opens the private order history. For unattended runs, inject `EMA_TRADER_VAULT_PASSPHRASE` into the process environment privately.
+- The catalog, public market data and visual settings stay available when the vault is locked. File names can reveal the market and account index. Encryption protects file contents on disk. The running app and authorized local MCP clients can access in-session data.
+- Code `storage.py`, `vault.py`, `engine.markets`, `engine.shared_fetch` and `broker.main`.

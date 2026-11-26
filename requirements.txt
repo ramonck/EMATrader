@@ -1,1 +1,2 @@
 lighter-sdk==1.1.8
+cryptography==50.0.2

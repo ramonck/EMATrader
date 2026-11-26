@@ -3,6 +3,9 @@
 - `Lighter/risk/` guarda o pico do saldo e a pausa da trava de perda por rede e conta. O diário do mercado guarda a referência do saldo e a margem de reinvestimento. [ORDERS](ORDERS.md)
 - A lista expõe os símbolos dos perpétuos ativos da Lighter. Catálogo em disco com validade de sete dias. Candles por ativo e intervalo têm cache curto compartilhado e trava local.
 - `EMA_TRADER_DATA_DIR` define a raiz. Por padrão: `%LOCALAPPDATA%/EMATrader` no Windows, `~/Library/Application Support/EMATrader` no macOS e `$XDG_STATE_HOME/ema-trader` ou `~/.local/state/ema-trader` no Linux.
-- `profiles/`: preferências gráficas por perfil. `quotes/`: cache de candles. `history/`: último sinal por ativo. `Lighter/`: diários e travas por rede e conta. `operacoes-lighter.jsonl`: execuções conciliadas.
-- A chave da Lighter vem da sessão ou do ambiente. Não fica nas preferências. O feed e o monitor mantêm janelas limitadas. O sistema operacional gerencia swap.
-- Código `storage.py`, `engine.markets`, `engine.shared_fetch` e `broker.main`.
+- `profiles/` / `ui-profiles/`: preferências gráficas por perfil. `quotes/`: cache de candles. `history/`: último sinal por ativo. `Lighter/`: diários e travas por rede e conta. `operacoes-lighter.jsonl`: execuções conciliadas.
+- A chave da Lighter, o perfil da conta e os registros privados em disco são criptografados com AES-256-GCM. A frase secreta do cofre deriva a chave por scrypt. Cada registro autentica seu próprio arquivo. A frase secreta é necessária para recuperar o cofre.
+- Ao abrir o cofre pela primeira vez, o app migra os perfis antigos, os diários, a trava de risco e o histórico de ordens. Encerre instâncias antigas antes de atualizar. A migração substitui arquivos ativos. Backups antigos e cópias externas devem ser protegidos à parte.
+- Na janela, use Configurações → Ordens → Desbloquear cofre. A chave validada é salva no perfil criptografado. No terminal, `--trade --save-key` salva a chave após validação. `--show-orders` lê o histórico privado. Em execução sem terminal, injete `EMA_TRADER_VAULT_PASSPHRASE` pelo ambiente privado do processo.
+- O catálogo, dados públicos de mercado e preferências visuais continuam disponíveis com o cofre bloqueado. Nomes de arquivos podem indicar o ativo e o índice da conta. A criptografia protege o conteúdo em disco. Dados em memória ficam disponíveis durante a sessão para o app e para clientes MCP autorizados.
+- Código `storage.py`, `vault.py`, `engine.markets`, `engine.shared_fetch` e `broker.main`.

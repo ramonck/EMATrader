@@ -190,11 +190,13 @@ class Monitor:
         self.trade_error = ""
         self.market_state = {}
 
-    def arm(self, config):
+    def arm(self, config, on_ready=None):
         fields = ("network", "account", "symbol")
         if self.managed and any(config[field] != self.managed[field] for field in fields):
             raise ValueError("Desative a automação atual antes de trocar de conta, rede ou ativo.")
         result = protected_request(config, command="arm")
+        if on_ready is not None:
+            on_ready()
         self.managed = config.copy()
         self.account = config["network"], config["account"]
         self.position_rows = result.get("positions", [])

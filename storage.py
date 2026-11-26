@@ -27,11 +27,17 @@ def read(path, default=None):
 
 
 def write(path, value):
+    with atomic_text(path) as file:
+        json.dump(value, file, ensure_ascii=False)
+
+
+@contextmanager
+def atomic_text(path):
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=path.parent, delete=False, mode="w", encoding="utf-8") as file:
         temporary = Path(file.name)
         try:
-            json.dump(value, file, ensure_ascii=False)
+            yield file
             file.flush()
             os.fsync(file.fileno())
         except BaseException:

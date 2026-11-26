@@ -35,8 +35,8 @@ jobs:
             desktop: false
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
           cache: pip
@@ -86,7 +86,7 @@ jobs:
           else
             tar -czf "EMA-Trader-${{ matrix.target }}.tar.gz" -C dist ema-trader-cli
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: EMA-Trader-${{ matrix.target }}
           path: EMA-Trader-${{ matrix.target }}.*
@@ -100,12 +100,18 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: EMA-Trader-*
           path: packages
           merge-multiple: true
+      - name: Atestar procedência dos pacotes
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: packages/EMA-Trader-*
       - name: Criar tag e anexar pacotes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -120,6 +126,8 @@ jobs:
             packages/EMA-Trader-linux-arm64.tar.gz
           )
           for package in "${packages[@]}"; do test -s "$package"; done
+          (cd packages && sha256sum EMA-Trader-*) > packages/SHA256SUMS
+          packages+=(packages/SHA256SUMS)
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" "${packages[@]}" --repo "$GITHUB_REPOSITORY" --clobber
           else

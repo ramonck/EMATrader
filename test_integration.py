@@ -15,13 +15,16 @@ from engine import STEP, Candle, Monitor, Signal
 from i18n import tr
 from knowledge import LANGUAGES, TOPICS, knowledge_rule
 from local_mcp import LocalMCP
+from vault import ORDERS, PREFIX, Vault, VaultError
 
 
 class AdoptionTests(unittest.TestCase):
     def test_drawdown_halt_persists_and_close_does_not_reverse(self):
-        request = {"drawdown": "25", "network": "testnet", "account": 1, "key": "test", "command": "risk"}
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "testnet-1.json"
+            root = Path(directory).resolve()
+            path = root / "testnet-1.json"
+            request = {"drawdown": "25", "network": "testnet", "account": 1, "key": "test", "command": "risk",
+                       "vault": Vault(root, b"x" * 32)}
             self.assertFalse(broker.account_risk(path, request, Row(total_asset_value="120", positions=[])))
             self.assertTrue(broker.account_risk(path, request, Row(total_asset_value="90", positions=[])))
             self.assertTrue(broker.account_risk(path, request, Row(total_asset_value="130", positions=[])))
@@ -40,6 +43,7 @@ class AdoptionTests(unittest.TestCase):
             journal = Path(directory) / "Lighter"
             journal.mkdir()
             path = journal / "mainnet-1.json"
+            vault = Vault(Path(directory).resolve(), b"x" * 32)
             market = Row(symbol="BTC", market_type="perp", status="active", market_id=1,
                          size_decimals=2, price_decimals=2, min_initial_margin_fraction=1000,
                          min_base_amount="0.01", min_quote_amount="1")
@@ -56,7 +60,7 @@ class AdoptionTests(unittest.TestCase):
                 create_market_order=send)
             sdk = Row(SignerClient=Row(ISOLATED_MARGIN_MODE=1))
             request = {"command": "rotate", "symbol": "BTC", "direction": 1, "candle": 2,
-                       "margin": "100", "leverage": 10, "network": "mainnet", "compound": True}
+                       "margin": "100", "leverage": 10, "network": "mainnet", "compound": True, "vault": vault}
             with (patch("broker.account_snapshot", AsyncMock(return_value=flat)),
                   patch("broker.position", AsyncMock(return_value=(Decimal(6), None))),
                   patch("broker.execution_quote", AsyncMock(return_value=Decimal(100))),
@@ -65,13 +69,14 @@ class AdoptionTests(unittest.TestCase):
                 result = asyncio.run(broker.execute(sdk, client, request, 1, 3, path))
             self.assertEqual(send.await_args.args[2], 600)
             self.assertEqual(result["position"], "6")
-            self.assertEqual(json.loads(path.read_text())["reinvestment"],
+            self.assertEqual(vault.read(path)["reinvestment"],
                              {"base": "100", "next": "60", "before": "60"})
 
     def test_adoption_reads_full_signed_position_without_trading(self):
         for sign in (-1, 1):
             with self.subTest(sign=sign), tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / "mainnet-1.json"
+                vault = Vault(Path(directory).resolve(), b"x" * 32)
                 market = Row(symbol="BTC", market_type="perp", status="active", market_id=1)
                 position = Row(symbol="BTC", market_id=1, position="0.00123", sign=sign,
                                pending_order_count=0, avg_entry_price="60000", unrealized_pnl="1")
@@ -80,19 +85,19 @@ class AdoptionTests(unittest.TestCase):
                     account_active_orders=AsyncMock(return_value=Row(orders=[]))),
                     create_auth_token_with_expiry=lambda **_: ("token", None),
                     create_market_order=AsyncMock(), update_leverage=AsyncMock())
-                request = {"command": "arm", "symbol": "BTC"}
+                request = {"command": "arm", "symbol": "BTC", "vault": vault}
                 with patch("broker.account_snapshot", AsyncMock(return_value=Row(positions=[position]))):
                     result = asyncio.run(broker.execute(None, client, request, 1, 3, path))
                 signed = Decimal("0.00123") * sign
                 self.assertEqual(Decimal(result["position"]), signed)
-                self.assertEqual(Decimal(json.loads(path.read_text())["position"]), signed)
+                self.assertEqual(Decimal(vault.read(path)["position"]), signed)
                 client.create_market_order.assert_not_awaited()
                 client.update_leverage.assert_not_awaited()
-                path.write_text('{"position":"0","candle":1,"pending":123}')
+                vault.write(path, {"position": "0", "candle": 1, "pending": 123})
                 with patch("broker.account_snapshot", AsyncMock(return_value=Row(positions=[position]))):
                     with self.assertRaises(broker.BridgeError):
                         asyncio.run(broker.execute(None, client, request, 1, 3, path))
-                self.assertEqual(json.loads(path.read_text())["pending"], 123)
+                self.assertEqual(vault.read(path)["pending"], 123)
 
     def test_arm_waits_for_a_fresh_turn(self):
         monitor = Monitor()
@@ -109,8 +114,9 @@ class AdoptionTests(unittest.TestCase):
             journal = Path(directory) / "Lighter"
             journal.mkdir()
             path = journal / "mainnet-1.json"
-            path.write_text('{"position":"-0.00123","candle":1,'
-                            '"reinvestment":{"base":"100","next":"100","before":"150"}}')
+            vault = Vault(Path(directory).resolve(), b"x" * 32)
+            vault.write(path, {"position": "-0.00123", "candle": 1,
+                               "reinvestment": {"base": "100", "next": "100", "before": "150"}})
             market = Row(symbol="BTC", market_type="perp", status="active", market_id=1,
                          size_decimals=5, price_decimals=2)
             row = Row(market_id=1, position="0.00123", sign=-1)
@@ -125,7 +131,7 @@ class AdoptionTests(unittest.TestCase):
                 create_auth_token_with_expiry=lambda **_: ("token", None),
                 create_market_order=send)
             request = {"command": "rotate", "symbol": "BTC", "direction": 1, "candle": 2,
-                       "margin": "100", "leverage": 5, "network": "mainnet", "compound": True}
+                       "margin": "100", "leverage": 5, "network": "mainnet", "compound": True, "vault": vault}
             balances = [Row(positions=[row]), Row(positions=[], available_balance="170")]
             with (patch("broker.account_snapshot", AsyncMock(side_effect=balances)),
                   patch("broker.position", AsyncMock(return_value=(Decimal(0), None))),
@@ -140,7 +146,7 @@ class AdoptionTests(unittest.TestCase):
             self.assertEqual(result["position"], "0")
             self.assertEqual(result["action"], "Fechar short")
             self.assertEqual(result["next_margin_usd"], "120")
-            self.assertEqual(json.loads(path.read_text())["reinvestment"],
+            self.assertEqual(vault.read(path)["reinvestment"],
                              {"base": "100", "next": "120", "pnl": "20"})
 
 
@@ -196,6 +202,38 @@ class KnowledgeAndMCPTests(unittest.TestCase):
         expected = ("Ordens automáticas ativas para BTC", "Automatic orders enabled for BTC",
                     "Órdenes automáticas activas para BTC")
         self.assertEqual(tuple(tr(language, message, symbol="BTC") for language in LANGUAGES), expected)
+
+
+class VaultTests(unittest.TestCase):
+    def test_migration_preserves_pending_state_and_rejects_bad_passphrase(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            profile = root / "profiles" / "DEFAULT.json"
+            journal = root / "Lighter" / "testnet-1.json"
+            log = root / ORDERS
+            for path in (profile, journal):
+                path.parent.mkdir()
+            profile.write_text('{"key":"example-private-key","account":1}', encoding="utf-8")
+            journal.write_text('{"position":"-0.123","pending":912}', encoding="utf-8")
+            log.write_text('{"action":"Fechar long"}\n', encoding="utf-8")
+            phrase = "long test vault passphrase"
+            vault = Vault.open(root, phrase)
+            self.assertEqual(vault.read(profile)["key"], "example-private-key")
+            self.assertEqual(vault.read(journal)["pending"], 912)
+            vault.append_order({"action": "Abrir short"})
+            self.assertEqual([row["action"] for row in vault.orders()], ["Fechar long", "Abrir short"])
+            for path in (profile, journal, log):
+                self.assertTrue(path.read_text(encoding="utf-8").startswith(PREFIX))
+            with self.assertRaises(VaultError):
+                Vault.open(root, "unrelated passphrase")
+            reopened = Vault.open(root, phrase)
+            self.assertEqual(reopened.read(journal)["position"], "-0.123")
+            profile.write_bytes(journal.read_bytes())
+            with self.assertRaises(VaultError):
+                reopened.read(profile)
+            journal.write_text('{"pending":false}', encoding="utf-8")
+            with self.assertRaises(VaultError):
+                reopened.read(journal)
 
 
 class BacktestTests(unittest.TestCase):

@@ -24,6 +24,11 @@ To build and publish a version, open **Actions → Compilar EMA Trader → Run w
 **Find an asset.** Type `BTC` or `NVDA` into **Find asset**. The list filters the Lighter catalog’s symbols. Press **Enter** to select the first result.
 
 
+## Security and verification
+
+The local vault encrypts the Lighter key, account profile and private trading history. Open **Settings → Orders → Unlock vault**. Releases provide build attestations and SHA256 digests. [Vault and migration](knowledge/en/DATA.md) · [Verify a download](knowledge/en/RELEASE.md)
+
+
 ## Run from source
 
 ```sh
