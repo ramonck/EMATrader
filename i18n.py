@@ -11,6 +11,8 @@ MESSAGES = {
     "Último sinal {time}": ("Latest signal {time}", "Última señal {time}"),
     "Aguardando sinal": ("Waiting for a signal", "Esperando una señal"),
     "Posição real · Lighter": ("Live position · Lighter", "Posición real · Lighter"),
+    "Sob gestão do robô": ("Managed by the bot", "Gestionada por el bot"),
+    "Fechamento em andamento": ("Close in progress", "Cierre en curso"),
     "Mais {count} posições": ("{count} more positions", "{count} posiciones más"),
     "Livro de ofertas e volume": ("Order book and volume", "Libro de órdenes y volumen"),
     "{symbol} · Volume 24h {volume}": ("{symbol} · 24h volume {volume}", "{symbol} · Volumen 24h {volume}"),

@@ -140,10 +140,30 @@ def gui(profile="DEFAULT", language=None):
     root.title("EMA Trader")
     root.geometry("1152x648")
     root.minsize(740, 520)
-    background, panel, chart = "#0b111c", "#151e2e", "#101723"
-    foreground, muted = "#f1f5fc", "#a8b7cc"
-    long_color, short_color = "#56e3b4", "#ff899b"
+    background, panel, chart = "#080e1b", "#101d32", "#0b1527"
+    foreground, muted = "#edf5ff", "#9cb3d0"
+    long_color, short_color, accent = "#56e3b4", "#ff899b", "#66d7ff"
+    border, hover, field = "#294668", "#223e63", "#142642"
     root.configure(background=background)
+    style = ttk.Style(root)
+    style.theme_use("clam")
+    style.configure(".", background=panel, foreground=foreground, bordercolor=border,
+                    darkcolor=border, lightcolor=border, troughcolor=field, focuscolor=accent)
+    style.configure("TButton", background=field, padding=(9, 5))
+    style.map("TButton", background=[("active", hover)], foreground=[("disabled", muted)])
+    style.configure("Primary.TButton", background="#153e5b", foreground=accent)
+    style.configure("TEntry", fieldbackground=field, insertcolor=foreground)
+    style.configure("TCombobox", fieldbackground=field, selectbackground=hover,
+                    selectforeground=foreground, arrowcolor=accent)
+    style.map("TCombobox", fieldbackground=[("readonly", field), ("disabled", panel)],
+              background=[("readonly", field), ("active", hover)], foreground=[("disabled", muted)])
+    style.configure("TNotebook.Tab", background=field, padding=(12, 6))
+    style.map("TNotebook.Tab", background=[("selected", panel)], foreground=[("selected", accent)])
+    style.map("TCheckbutton", background=[("active", panel)], indicatorcolor=[("selected", accent)])
+    style.configure("TSeparator", background=border)
+    for option, value in (("background", field), ("foreground", foreground), ("selectBackground", hover),
+                          ("selectForeground", foreground)):
+        root.option_add(f"*TCombobox*Listbox.{option}", value)
     icon = Path(getattr(sys, "_MEIPASS", Path(__file__).parent)) / "assets" / "icon.png"
     if icon.is_file():
         root.iconphoto(True, tk.PhotoImage(file=icon))
@@ -230,7 +250,7 @@ def gui(profile="DEFAULT", language=None):
 
     toolbar = tk.Frame(root, bg=background, padx=18, pady=12)
     toolbar.pack(fill="x")
-    dashboard_label(toolbar, text="EMA Trader", fg=long_color, font=("TkDefaultFont", 18, "bold")).pack(side="left", padx=(0, 18))
+    dashboard_label(toolbar, text="EMA Trader", fg=accent, font=("TkDefaultFont", 18, "bold")).pack(side="left", padx=(0, 18))
     localize(dashboard_label(toolbar, fg=muted), "Buscar ativo").pack(side="left")
     search = tk.StringVar()
     search_field = ttk.Entry(toolbar, textvariable=search, width=9)
@@ -252,7 +272,7 @@ def gui(profile="DEFAULT", language=None):
 
     search.trace_add("write", filter_assets)
     search_field.bind("<Return>", select_match)
-    refresh_button = localize(ttk.Button(toolbar, command=lambda: refresh()), "Atualizar")
+    refresh_button = localize(ttk.Button(toolbar, command=lambda: refresh(), style="Primary.TButton"), "Atualizar")
     refresh_button.pack(side="left", padx=4)
     settings_button = localize(ttk.Button(toolbar, command=lambda: settings()), "Configurações")
     settings_button.pack(side="left", padx=4)
@@ -266,7 +286,7 @@ def gui(profile="DEFAULT", language=None):
     tickers = [dashboard_label(market_strip, bg=panel, anchor="w") for _ in range(4)]
     for ticker in tickers:
         ticker.pack(side="left", fill="x", expand=True)
-    signal_panel = tk.Frame(body, bg=panel, padx=16, pady=9)
+    signal_panel = tk.Frame(body, bg=panel, padx=16, pady=9, highlightthickness=1, highlightbackground=border)
     signal_panel.pack(fill="x", pady=(0, 12))
     localize(dashboard_label(signal_panel, bg=panel, fg=muted, font=("TkDefaultFont", 10, "bold")),
              "Sinal da EMA · 15 min").pack(anchor="w")
@@ -279,8 +299,9 @@ def gui(profile="DEFAULT", language=None):
     card.pack(side="right", fill="y", padx=(12, 0))
     localize(dashboard_label(card, bg=panel, fg=muted, font=("TkDefaultFont", 10, "bold")),
              "Posição real · Lighter").pack(anchor="w")
-    dashboard_label(card, bg=panel, textvariable=position, width=23, wraplength=240, anchor="w",
-                    justify="left", font=("TkDefaultFont", 12, "bold")).pack(anchor="w", pady=(8, 0))
+    position_label = dashboard_label(card, bg=panel, textvariable=position, width=23, wraplength=240,
+                                     anchor="w", justify="left", font=("TkDefaultFont", 14, "bold"))
+    position_label.pack(anchor="w", pady=(8, 0))
     dashboard_label(card, bg=panel, fg=muted, textvariable=detail, wraplength=240,
                     justify="left").pack(anchor="w", pady=(0, 4))
     ttk.Separator(card).pack(fill="x", pady=8)
@@ -339,7 +360,7 @@ def gui(profile="DEFAULT", language=None):
             x = 18 + (i + .5) * stride
             point = values.get(c.time)
             if point and last:
-                tone = {1: "#174637", -1: "#592f3a", 0: "#333e51"}[point.band]
+                tone = {1: "#164637", -1: "#592a42", 0: "#223e63"}[point.band]
                 canvas.create_polygon(x-stride, y(last.upper), x, y(point.upper),
                                       x, y(point.lower), x-stride, y(last.lower), fill=tone)
             last = point
@@ -536,13 +557,26 @@ def gui(profile="DEFAULT", language=None):
         account_stale = any(error.startswith("Conta:") for error in errors)
         if monitor.position_rows and not account_stale:
             rows = monitor.position_rows
-            position.set("\n".join(f'{row["symbol"]} · {label(int(row["sign"]), language)}' for row in rows[:3]))
-            detail.set(t("Mais {count} posições", count=len(rows) - 3) if len(rows) > 3 else "")
+            config = monitor.managed or (monitor.recovery if monitor.recovery_pending else None)
+            controlled = next((row for row in rows if config and row["symbol"] == config["symbol"]), None)
+            lead = controlled or rows[0]
+            side = int(lead["sign"])
+            position.set(f'{lead["symbol"]} · {label(side, language)}')
+            position_label.configure(fg=long_color if side > 0 else short_color)
+            notes = []
+            if controlled:
+                notes.append(t("Sob gestão do robô" if monitor.managed else "Fechamento em andamento"))
+            others = [row for row in rows if row is not lead]
+            notes.extend(f'{row["symbol"]} · {label(int(row["sign"]), language)}' for row in others[:2])
+            if len(others) > 2:
+                notes.append(t("Mais {count} posições", count=len(others) - 2))
+            detail.set("\n".join(notes))
         else:
             position.set(t("Dados desatualizados" if account_stale else
                            "Sem posição aberta" if monitor.account and monitor.closed_at else
                            "Aguardando conta" if monitor.account else "Conta não configurada"))
             detail.set("")
+            position_label.configure(fg=foreground)
         mode = t("Ordens automáticas ativas para {symbol}", symbol=monitor.managed["symbol"]) if monitor.managed else t("Ordens automáticas desativadas")
         if monitor.managed and monitor.managed["symbol"] != selected.get():
             mode += " · " + t("Novas ordens neste gráfico estão bloqueadas.")
@@ -579,6 +613,7 @@ def gui(profile="DEFAULT", language=None):
         nonlocal language
         win = tk.Toplevel(root)
         win.title(t("Configurações"))
+        win.configure(background=background)
         win.transient(root)
         win.grab_set()
         tabs = ttk.Notebook(win)
