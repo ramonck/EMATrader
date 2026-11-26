@@ -6,6 +6,9 @@ from string import Formatter
 LANGUAGES = {"pt": "Português", "en": "English", "es": "Español"}
 
 MESSAGES = {
+    "Ver P&L privado": ("View private P&L", "Ver P&L privado"),
+    "P&L privado": ("Private P&L", "P&L privado"),
+    "P&L das posições abertas": ("Open position P&L", "P&L de posiciones abiertas"),
     "Mercado · 24h": ("Market · 24h", "Mercado · 24h"),
     "Sinal da EMA · 15 min": ("EMA signal · 15 min", "Señal de EMA · 15 min"),
     "Último sinal {time}": ("Latest signal {time}", "Última señal {time}"),

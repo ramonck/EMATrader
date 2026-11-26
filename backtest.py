@@ -38,7 +38,8 @@ def candles_from_csv(path):
             previous = end
 
 
-def replay(candles, start, end, fee, margin_usd=None, leverage=1, compound=False, stop_loss=0, max_account_drawdown=0):
+def replay(candles, start, end, fee, margin_usd=None, leverage=1, compound=False, stop_loss=0, max_account_drawdown=0,
+           confirmation_bars=1, require_market_close=False):
     if start >= end or start % STEP or end % STEP or not 0 <= fee < 1:
         raise ValueError("Provide aligned start/end times and a valid fee")
     if not candles or candles[0].time > start - 22 * STEP or candles[-1].time < end:
@@ -53,7 +54,7 @@ def replay(candles, start, end, fee, margin_usd=None, leverage=1, compound=False
         raise ValueError("Stop loss must be between 0% and 100% of margin")
     if not 0 <= max_account_drawdown < 1:
         raise ValueError("Account drawdown must be between 0% and 100%")
-    signals = {point.time: point for point in ema_scalping(candles) if point.action}
+    signals = {point.time: point for point in ema_scalping(candles, confirmation_bars, require_market_close) if point.action}
     starting_value = margin_usd if margin_usd is not None else 1.0
     equity = high_water = starting_value
     order_margin = target_margin = starting_value
@@ -157,10 +158,15 @@ def main():
     parser.add_argument("--stop-loss", type=float, default=0, help="stop loss as a percent of margin, before fees")
     parser.add_argument("--max-account-drawdown", type=float, default=0,
                         help="percent drawdown from peak equity that closes next bar and halts trading")
+    parser.add_argument("--confirmation-bars", type=int, choices=(1, 2), default=1,
+                        help="consecutive same-color closed EMA bars before a reversal")
+    parser.add_argument("--require-market-close", action="store_true",
+                        help="require the raw OHLC close outside the EMA band in the same direction")
     args = parser.parse_args()
     with_candles = list(candles_from_csv(args.csv))
     result = replay(with_candles, args.start, args.end, args.fee_bps / 10000,
-                    args.margin_usd, args.leverage, args.compound, args.stop_loss / 100, args.max_account_drawdown / 100)
+                    args.margin_usd, args.leverage, args.compound, args.stop_loss / 100, args.max_account_drawdown / 100,
+                    confirmation_bars=args.confirmation_bars, require_market_close=args.require_market_close)
     print(json.dumps(result, indent=2))
 
 

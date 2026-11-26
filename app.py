@@ -244,6 +244,7 @@ def gui(profile="DEFAULT", language=None):
     market_view = None
     stories = []
     context_future = news_future = None
+    private_pnl = private_pnl_value = None
 
     def dashboard_label(parent, *, bg=background, fg=foreground, **options):
         return tk.Label(parent, bg=bg, fg=fg, **options)
@@ -304,6 +305,7 @@ def gui(profile="DEFAULT", language=None):
     position_label.pack(anchor="w", pady=(8, 0))
     dashboard_label(card, bg=panel, fg=muted, textvariable=detail, wraplength=240,
                     justify="left").pack(anchor="w", pady=(0, 4))
+    localize(ttk.Button(card, command=lambda: show_private_pnl()), "Ver P&L privado").pack(anchor="w", pady=(2, 0))
     ttk.Separator(card).pack(fill="x", pady=8)
     localize(dashboard_label(card, bg=panel, fg=muted, font=("TkDefaultFont", 10, "bold")),
              "Livro de ofertas e volume").pack(anchor="w")
@@ -531,6 +533,34 @@ def gui(profile="DEFAULT", language=None):
             else:
                 row.configure(text=t("Sem manchetes disponíveis") if i == 0 else "", cursor="", fg=muted)
 
+    def update_private_pnl(account_stale):
+        if private_pnl is None or not private_pnl.winfo_exists():
+            return
+        if account_stale:
+            value = t("Dados desatualizados")
+        elif not monitor.account or not monitor.closed_at:
+            value = t("Aguardando conta" if monitor.account else "Conta não configurada")
+        else:
+            value = "\n".join(
+                f'{row["symbol"]} · {label(int(row["sign"]), language)} · US$ {Decimal(row["unrealized_pnl"]):+,.2f}'
+                for row in monitor.position_rows
+            ) or t("Sem posição aberta")
+        private_pnl_value.configure(text=value)
+
+    def show_private_pnl():
+        nonlocal private_pnl, private_pnl_value
+        if private_pnl is not None and private_pnl.winfo_exists():
+            private_pnl.lift()
+            return
+        private_pnl = tk.Toplevel(root, bg=background, padx=16, pady=14)
+        private_pnl.title(t("P&L privado"))
+        private_pnl.transient(root)
+        dashboard_label(private_pnl, text=t("P&L das posições abertas"), fg=muted).pack(anchor="w")
+        private_pnl_value = dashboard_label(private_pnl, font=("TkDefaultFont", 15, "bold"), justify="left")
+        private_pnl_value.pack(anchor="w", pady=(6, 0))
+        errors = last_view[3] if last_view else []
+        update_private_pnl(any(error.startswith("Conta:") for error in errors))
+
     def render():
         nonlocal last_chart
         symbol, candles, points, errors = last_view or (selected.get(), [], [], [])
@@ -542,7 +572,12 @@ def gui(profile="DEFAULT", language=None):
             if latest:
                 signal_title.set("  →  ".join(t(SIGNAL_ACTIONS[code]) for code in latest.action.split(" / ")))
                 stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(latest.time / 1000))
-                signal_detail.set(t("Último sinal {time}", time=stamp) + (f"  ·  {current}" if latest != value else ""))
+                details = [t("Último sinal {time}", time=stamp)]
+                if latest != value:
+                    details.append(current)
+                if not monitor.managed:
+                    details.append(t("Ordens automáticas desativadas"))
+                signal_detail.set("  ·  ".join(details))
             else:
                 signal_title.set(current)
                 signal_detail.set("")
@@ -555,6 +590,7 @@ def gui(profile="DEFAULT", language=None):
             signal_detail.set(t("Dados desatualizados" if errors else "Aguardando candles fechados de 15 min"))
             action_label.configure(fg=foreground)
         account_stale = any(error.startswith("Conta:") for error in errors)
+        update_private_pnl(account_stale)
         if monitor.position_rows and not account_stale:
             rows = monitor.position_rows
             config = monitor.managed or (monitor.recovery if monitor.recovery_pending else None)

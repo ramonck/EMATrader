@@ -18,3 +18,4 @@ python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T
 python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --fee-bps 1
 python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --fee-bps 5
 ```
+The experimental `--confirmation-bars 2` (two consecutive bars) and `--require-market-close` (raw close outside the band) filters are available in the simulator. The app uses the original indicator reversal.

@@ -105,10 +105,11 @@ class Signal:
     action: str
 
 
-def ema_scalping(candles):
+def ema_scalping(candles, confirmation_bars=1, require_market_close=False):
     points = []
     bands = []
     side = 0
+    previous_band = streak = 0
     previous_open = previous_close = None
     upper = lower = None
     for candle in candles:
@@ -123,8 +124,12 @@ def ema_scalping(candles):
             continue
         up, down = upper - bands[-23][0], lower - bands[-23][1]
         band = 1 if close > upper and up > 0 and down > 0 else -1 if close < lower and up < 0 and down < 0 else 0
+        if require_market_close and (band > 0 and candle.close <= upper or band < 0 and candle.close >= lower):
+            band = 0
+        streak = streak + 1 if band and band == previous_band else 1
+        previous_band = band
         action = ""
-        if band and band != side:
+        if band and band != side and streak >= confirmation_bars:
             action = ("FS / AL" if side < 0 else "AL") if band > 0 else ("FL / AS" if side > 0 else "AS")
             side = band
         points.append(Signal(candle.time, upper, lower, up, down, band, side, action))
