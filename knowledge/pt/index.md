@@ -2,6 +2,7 @@
 
 Abra só os tópicos relevantes. Os IDs são iguais nos três idiomas.
 
+- [LIGHTER · Lighter para iniciantes](LIGHTER.md)
 - [ARCH · Estrutura e fluxos](ARCH.md)
 - [SIGNALS · Faixa EMA de 15 min](SIGNALS.md)
 - [ORDERS · Posição real, adoção e execução](ORDERS.md)

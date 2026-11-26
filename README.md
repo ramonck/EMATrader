@@ -24,6 +24,34 @@ Para gerar e publicar uma versão, abra **Actions → Compilar EMA Trader → Ru
 **Busca de ativos.** Digite `BTC` ou `NVDA` no campo **Buscar ativo**. A lista filtra os códigos do catálogo da Lighter. Pressione **Enter** para selecionar o primeiro resultado.
 
 
+## Primeiros passos com a Lighter
+
+A Lighter é um protocolo de negociação de contratos perpétuos no ecossistema Ethereum. Um perpétuo acompanha o preço de um ativo, como BTC, sem data de vencimento. O EMA Trader usa a Lighter porque ela oferece uma API para consultar a conta e executar ordens. Taxas, spread e funding podem afetar o resultado. Com alavancagem, uma posição pode ser liquidada. [FAQ da Lighter](https://lighter.xyz/faq) · [Tabela oficial de taxas](https://docs.lighter.xyz/trading/trading-fees)
+
+O navegador serve para conectar a carteira e depositar. O robô roda no seu computador, calcula a faixa EMA e fala com a **API da Lighter**. A chave da API fica no cofre local. Você pode acompanhar a conta antes de habilitar ordens.
+
+```mermaid
+flowchart LR
+    subgraph LOCAL["Sua máquina"]
+        B["Navegador: app.lighter.xyz"]
+        R["EMA Trader"]
+        V["Cofre local: chave de API"]
+    end
+    L["API e conta Lighter"]
+    M["Binance para BTC / Lighter para outros ativos"]
+    B -->|"Conectar carteira e depositar"| L
+    V -->|"Chave para assinar ordens"| R
+    M -->|"Candles públicos"| R
+    R -->|"Enviar ordens quando habilitado"| L
+    L -->|"Posição e P&L"| R
+```
+
+Abra **Depositar** na Lighter antes de comprar USDC. Anote o token, a rede de origem e o valor mínimo que a tela mostra. Depois use a rota compatível para depositar e confira se o saldo apareceu na conta certa.
+
+**Brasil.** Deposite reais por Pix na Binance Brasil ou OKX Brasil, compre USDC e confira se a rede de saque coincide com a rota exibida pela Lighter. A CriptoCore documenta pagamentos em reais por Pix a partir de saldo cripto. [Binance Brasil](https://www.binance.com/pt-BR/support/faq/detail/53636607eebc42dbb513863b49bba98f) · [OKX Brasil](https://www.okx.com/pt-br/help/how-do-i-deposit-brl) · [CriptoCore](https://criptocore.net/)
+
+[Guia completo de depósito e configuração](knowledge/pt/LIGHTER.md)
+
 ## Apoie o projeto
 
 Gostou do EMA Trader e quer apoiar o projeto? Envie **USDC nativo** pela rede **Arbitrum One** para este endereço:

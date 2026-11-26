@@ -24,6 +24,34 @@ To build and publish a version, open **Actions → Compilar EMA Trader → Run w
 **Find an asset.** Type `BTC` or `NVDA` into **Find asset**. The list filters the Lighter catalog’s symbols. Press **Enter** to select the first result.
 
 
+## Getting started with Lighter
+
+Lighter is a protocol for trading perpetual futures in the Ethereum ecosystem. A perpetual tracks an asset price, such as BTC, without an expiry date. EMA Trader uses Lighter’s API to read account data and execute orders. Fees, spread and funding affect trading costs. Leveraged positions can be liquidated. [Lighter FAQ](https://lighter.xyz/faq) · [Official fee schedule](https://docs.lighter.xyz/trading/trading-fees)
+
+Use the browser to connect your wallet and deposit. EMA Trader runs on your computer, calculates the EMA band and talks to the **Lighter API**. Its API key stays in the local vault. You can monitor the account before enabling orders.
+
+```mermaid
+flowchart LR
+    subgraph LOCAL["Your computer"]
+        B["Browser: app.lighter.xyz"]
+        R["EMA Trader"]
+        V["Local vault: API key"]
+    end
+    L["Lighter API and account"]
+    M["Binance for BTC / Lighter for other assets"]
+    B -->|"Connect wallet and deposit"| L
+    V -->|"Key used to sign orders"| R
+    M -->|"Public candles"| R
+    R -->|"Send orders when enabled"| L
+    L -->|"Position and P&L"| R
+```
+
+If Lighter is available to you, open **Deposit** before buying USDC. Note the asset, source network and minimum shown. Use the matching deposit route and check that the intended account receives the credit.
+
+**United States.** ACH is a way to fund a U.S. exchange from a verified bank account. Lighter’s terms restrict its interface and API for U.S. residents and people located in the U.S. The guide explains ACH separately from Lighter funding. [Coinbase ACH](https://help.coinbase.com/en/exchange/funding/depositing-with-ach) · [Lighter terms](https://lighter.xyz/terms)
+
+[Full deposit and setup guide](knowledge/en/LIGHTER.md)
+
 ## Support the project
 
 Enjoy EMA Trader and want to support the project? Send **native USDC** on **Arbitrum One** to this address:

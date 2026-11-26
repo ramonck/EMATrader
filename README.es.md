@@ -24,6 +24,34 @@ Para compilar y publicar una versión, abre **Actions → Compilar EMA Trader �
 **Buscar un activo.** Escribe `BTC` o `NVDA` en **Buscar activo**. La lista filtra los códigos del catálogo de Lighter. Pulsa **Enter** para seleccionar el primer resultado.
 
 
+## Primeros pasos con Lighter
+
+Lighter es un protocolo para operar contratos perpetuos en el ecosistema Ethereum. Un perpetuo sigue el precio de un activo, como BTC, sin fecha de vencimiento. EMA Trader usa la API de Lighter para consultar la cuenta y ejecutar órdenes. Las comisiones, el spread y la financiación afectan al resultado. Una posición apalancada puede liquidarse. [Preguntas frecuentes de Lighter](https://lighter.xyz/faq) · [Tarifas oficiales](https://docs.lighter.xyz/trading/trading-fees)
+
+El navegador sirve para conectar la billetera y depositar. EMA Trader funciona en tu equipo, calcula la banda EMA y se comunica con la **API de Lighter**. La clave de API queda en la bóveda local. Puedes seguir la cuenta antes de activar órdenes.
+
+```mermaid
+flowchart LR
+    subgraph LOCAL["Tu equipo"]
+        B["Navegador: app.lighter.xyz"]
+        R["EMA Trader"]
+        V["Bóveda local: clave API"]
+    end
+    L["API y cuenta de Lighter"]
+    M["Binance para BTC / Lighter para otros activos"]
+    B -->|"Conectar billetera y depositar"| L
+    V -->|"Clave para firmar órdenes"| R
+    M -->|"Velas públicas"| R
+    R -->|"Enviar órdenes si están activadas"| L
+    L -->|"Posición y P&L"| R
+```
+
+Abre **Depositar** antes de comprar USDC. Revisa el activo, la red de origen y el importe mínimo que indica la pantalla. Usa la ruta compatible y comprueba que se acredite la cuenta correcta.
+
+**Países hispanohablantes.** Deposita moneda local en una plataforma disponible en tu país y compra USDC. Por ejemplo, Bitso documenta SPEI en México, transferencias a un CVU en Argentina y depósitos mediante Bancolombia en Colombia. [México](https://support.bitso.com/hc/es-mx/articles/4415147781012-C%C3%B3mo-hacer-una-transferencia-SPEI-en-pesos-mexicanos) · [Argentina](https://support.bitso.com/hc/es-ar/articles/51158963807124--C%C3%B3mo-deposito-pesos-argentinos-ARS) · [Colombia](https://support.bitso.com/hc/es-co/articles/53399222316436-C%C3%B3mo-depositar-pesos-colombianos-COP)
+
+[Guía completa de depósito y configuración](knowledge/es/LIGHTER.md)
+
 ## Apoya el proyecto
 
 ¿Te gusta EMA Trader y quieres apoyar el proyecto? Envía **USDC nativo** por la red **Arbitrum One** a esta dirección:

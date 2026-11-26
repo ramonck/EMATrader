@@ -5,7 +5,7 @@ from pathlib import Path
 from i18n import LANGUAGES
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).parent)) / "knowledge"
-TOPICS = ("ARCH", "SIGNALS", "ORDERS", "RECONNECT", "SUBACCOUNTS", "DATA", "AI", "MCP", "RELEASE", "BACKTEST", "VERIFY")
+TOPICS = ("LIGHTER", "ARCH", "SIGNALS", "ORDERS", "RECONNECT", "SUBACCOUNTS", "DATA", "AI", "MCP", "RELEASE", "BACKTEST", "VERIFY")
 
 
 def knowledge_rule(language, topic):
