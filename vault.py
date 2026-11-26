@@ -4,9 +4,8 @@ import json
 import os
 import secrets
 
-from cryptography.exceptions import InvalidTag
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+from Cryptodome.Cipher import AES
+from Cryptodome.Protocol.KDF import scrypt
 
 from storage import account_lock, atomic_text
 
@@ -30,7 +29,7 @@ def decode(value):
 class Vault:
     def __init__(self, root, key):
         self.root = root
-        self.cipher = AESGCM(key)
+        self.key = key
 
     @classmethod
     def open(cls, root, passphrase):
@@ -47,7 +46,7 @@ class Vault:
                     raise ValueError
             except (TypeError, KeyError, ValueError) as error:
                 raise VaultError("Metadados do cofre inválidos.") from error
-            key = Scrypt(salt=salt, length=32, n=2**16, r=8, p=2).derive(passphrase.encode("utf-8"))
+            key = scrypt(passphrase.encode("utf-8"), salt, 32, N=2**16, r=8, p=2)
             vault = cls(root, key)
             if meta is None:
                 meta = {"salt": encode(salt), "check": vault.seal(path, {"migrated": False})}
@@ -74,7 +73,10 @@ class Vault:
     def seal(self, path, value):
         nonce = secrets.token_bytes(12)
         payload = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        return PREFIX + encode(nonce + self.cipher.encrypt(nonce, payload, self.aad(path)))
+        cipher = AES.new(self.key, AES.MODE_GCM, nonce=nonce)
+        cipher.update(self.aad(path))
+        ciphertext, tag = cipher.encrypt_and_digest(payload)
+        return PREFIX + encode(nonce + ciphertext + tag)
 
     def unseal(self, path, value):
         try:
@@ -83,8 +85,10 @@ class Vault:
             raw = decode(value[len(PREFIX):])
             if len(raw) < 28:
                 raise ValueError
-            return json.loads(self.cipher.decrypt(raw[:12], raw[12:], self.aad(path)))
-        except (AttributeError, ValueError, InvalidTag) as error:
+            cipher = AES.new(self.key, AES.MODE_GCM, nonce=raw[:12])
+            cipher.update(self.aad(path))
+            return json.loads(cipher.decrypt_and_verify(raw[12:-16], raw[-16:]))
+        except (AttributeError, ValueError) as error:
             raise VaultError("Registro privado inválido ou adulterado.") from error
 
     def read(self, path, default=None):
