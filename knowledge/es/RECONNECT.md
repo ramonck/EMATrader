@@ -1,5 +1,7 @@
 # RECONNECT · Actualización y recuperación
 - La aplicación consulta cada cinco minutos, alineada al reloj, y reintenta cada dos minutos si falla la lectura. Sigue minimizada. Suspender, apagar o cerrar el proceso interrumpe el monitor.
 - El cursor empieza al activar. Tras reconectar, el último giro direccional cerrado posterior al cursor es elegible. Se omiten los giros intermedios y se usa el precio disponible al ejecutar. Gris no borra el giro.
-- El registro guarda vela y orden pendiente antes del envío. Si no se sabe el resultado, se pausa para conciliar. Un proceso nuevo comienza en modo de seguimiento.
+- La bóveda guarda mercado, vela, cantidad y último `trade_id` al iniciar un cierre. Cada intento registra su `client_order_index` antes del envío. La recuperación consulta esa orden exacta y verifica las ejecuciones de la cuenta en el mismo mercado.
+- Cada dos minutos, la recuperación puede reanudar un cierre pendiente por el saldo de la posición original con `reduce_only`. Si la orden está activa o sin confirmar, la aplicación espera. Un cambio en el historial o la posición bloquea el envío. La consulta directa de Lighter tiene una ventana limitada para órdenes cerradas. Si la identidad no es verificable, compruebe la posición en Lighter.
+- Tras reiniciar, desbloquee la bóveda del perfil que tenía automatización activa. La recuperación solo cierra la posición vinculada al registro. Para abrir posiciones nuevas, vuelva a activar las órdenes automáticas. En la terminal, use los mismos argumentos de `--trade` y de cuenta. **Solo seguir la cuenta** desactiva la recuperación del perfil gráfico.
 - Código `Monitor.snapshot`, `take_signal` y `broker.execute`.

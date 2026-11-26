@@ -187,6 +187,8 @@ class Monitor:
         self.trade_error = ""
         self.entry_retry = None
         self.entry_retry_at = 0
+        self.recovery = None
+        self.recovery_pending = False
         self.market_state = {}
         self.market_state_network = None
 
@@ -202,6 +204,7 @@ class Monitor:
         if on_ready is not None:
             on_ready()
         self.managed = config.copy()
+        self.recovery = self.managed
         self.account = config["network"], config["account"]
         self.position_rows = result.get("positions", [])
         self.closed_at = now_ms()
@@ -232,6 +235,20 @@ class Monitor:
         self.market_state.update({symbol: (candles[-24:], points[-1])
                                   for symbol, (candles, points) in results.items()})
         orders = []
+        self.recovery_pending = False
+        if self.recovery and not managed:
+            try:
+                self.recovery_pending = bool(broker.saved_close(self.recovery))
+                if self.recovery_pending:
+                    result = protected_request(self.recovery, command="resume_close")
+                    orders = [result] if result.get("action") else []
+                    self.recovery_pending = bool(broker.saved_close(self.recovery))
+                    self.trade_error = broker.CLOSE_PENDING if self.recovery_pending else ""
+            except Exception as error:
+                self.trade_error = str(error)
+                if str(error) == broker.CLOSE_CHANGED:
+                    self.recovery = None
+                    self.recovery_pending = False
         if managed:
             points = results.get(managed["symbol"], (None, []))[1]
             signal = take_signal(points, self.cursor)
@@ -259,6 +276,11 @@ class Monitor:
                 except Exception as error:
                     self.managed = None
                     self.entry_retry = None
+                    self.trade_error = str(error)
+            if not self.managed and self.recovery:
+                try:
+                    self.recovery_pending = bool(broker.saved_close(self.recovery))
+                except (OSError, ValueError) as error:
                     self.trade_error = str(error)
         if self.account:
             try:

@@ -26,10 +26,10 @@ def credentials(symbol, network, account, key, key_index, margin, leverage, draw
     symbol_key(symbol)
     if account < 0 or not 0 <= key_index <= 254 or not key or not 1 <= leverage <= 20 or not 0 < margin <= 1_000_000:
         raise ValueError("Confira a conta, chave, margem e alavancagem.")
-    if not drawdown.is_finite() or not 0 < drawdown < 100:
+    if not drawdown.is_finite() or not 0 <= drawdown < 100:
         raise ValueError("Limite de perda da conta inválido.")
     return {"symbol": symbol, "network": network, "account": account, "key": key, "key_index": key_index,
-            "margin": str(margin), "leverage": leverage, "compound": True, "drawdown": str(drawdown)}
+            "margin": str(margin), "leverage": leverage, "compound": True, "drawdown": str(drawdown) if drawdown else None}
 
 
 def cli(args):
@@ -82,7 +82,11 @@ def run_cli(args, monitor, mcp):
                              args.margin, args.leverage, args.drawdown)
         def save():
             vault.write(path, dict(saved, **identity, key=key))
-        monitor.arm(dict(config, vault=vault), on_ready=save if args.save_key else None)
+        config["vault"] = vault
+        if broker.saved_close(config):
+            monitor.recovery = config
+        else:
+            monitor.arm(config, on_ready=save if args.save_key else None)
     while True:
         candles, points, orders, errors = monitor.snapshot(args.symbol)
         if mcp.port:
@@ -105,7 +109,7 @@ def run_cli(args, monitor, mcp):
             print(" | ".join(translate_error(language, error) for error in errors), file=sys.stderr)
         if args.once:
             break
-        time.sleep(RETRY if errors else max(2, NORMAL_REFRESH - time.time() % NORMAL_REFRESH + 2))
+        time.sleep(RETRY if errors or monitor.recovery_pending else max(2, NORMAL_REFRESH - time.time() % NORMAL_REFRESH + 2))
 
 
 def gui(profile="DEFAULT", language=None):
@@ -156,6 +160,13 @@ def gui(profile="DEFAULT", language=None):
                         raise VaultError("As frases secretas não coincidem.")
             candidate = Vault.open(root_path, secret)
             private = candidate.read(private_path, {})
+            if private.get("recover_close") and private.get("key"):
+                config = credentials(private["symbol"], private["network"], private["account"],
+                                     private["key"], private["key_index"], Decimal(private["margin"]),
+                                     private["leverage"], Decimal(private.get("drawdown") or "0"))
+                config["vault"] = candidate
+                if broker.saved_close(config):
+                    monitor.recovery = config
             vault = candidate
             return True
         except (OSError, ValueError) as error:
@@ -332,7 +343,7 @@ def gui(profile="DEFAULT", language=None):
                 selected.set(monitor.managed["symbol"])
                 schedule(1)
             else:
-                schedule(RETRY if errors else max(2, NORMAL_REFRESH - time.time() % NORMAL_REFRESH + 2))
+                schedule(RETRY if errors or monitor.recovery_pending else max(2, NORMAL_REFRESH - time.time() % NORMAL_REFRESH + 2))
 
         submit(update, show, lambda: schedule(RETRY))
 
@@ -476,7 +487,7 @@ def gui(profile="DEFAULT", language=None):
         for i, (name, default) in enumerate((("Rede", private.get("network", "testnet")), ("Índice da conta", str(private.get("account", ""))),
                 ("Índice da chave", str(private.get("key_index", 3))), ("Chave privada", private.get("key", "")),
                 ("Margem base USD", private.get("margin", "100")), ("Alavancagem", str(private.get("leverage", 5))),
-                ("Limite de perda da conta (%)", private.get("drawdown", "25")))):
+                ("Limite de perda (% · opcional)", private.get("drawdown", "25") or ""))):
             ttk.Label(form, text=t(name)).grid(row=i, column=0, sticky="w", pady=4)
             var = tk.StringVar(value=default)
             values[name] = var
@@ -494,9 +505,12 @@ def gui(profile="DEFAULT", language=None):
                     raise ValueError("Índice inválido.")
                 if not unlock(win):
                     return
-                config = credentials(symbol, network, idx, values["Chave privada"].get(), int(values["Índice da chave"].get()),
-                                     Decimal(values["Margem base USD"].get()), int(values["Alavancagem"].get()),
-                                     Decimal(values["Limite de perda da conta (%)"].get())) if trade else None
+                config = None
+                if trade:
+                    drawdown = values["Limite de perda (% · opcional)"].get().strip().replace(",", ".")
+                    config = credentials(symbol, network, idx, values["Chave privada"].get(),
+                                         int(values["Índice da chave"].get()), Decimal(values["Margem base USD"].get()),
+                                         int(values["Alavancagem"].get()), Decimal(drawdown or "0"))
             except (ValueError, ArithmeticError) as error:
                 messagebox.showerror(t("Configurações"), translate_error(language, error), parent=win)
                 return
@@ -507,7 +521,7 @@ def gui(profile="DEFAULT", language=None):
 
             def configure():
                 old_identity = private.get("network"), private.get("account")
-                updated = dict(private, network=network, account=idx, symbol=symbol)
+                updated = dict(private, network=network, account=idx, symbol=symbol, recover_close=trade)
                 if config:
                     updated.update({field: config[field] for field in ("margin", "leverage", "drawdown", "key_index", "key")})
                 elif old_identity != (network, idx):
@@ -525,6 +539,8 @@ def gui(profile="DEFAULT", language=None):
                         monitor.position_rows = []
                         monitor.closed_at = 0
                     monitor.managed = None
+                    monitor.recovery = None
+                    monitor.recovery_pending = False
                     monitor.entry_retry = None
                     monitor.account = network, idx
                     monitor.trade_error = ""
@@ -570,7 +586,8 @@ def main():
     parser.add_argument("--key-index", type=int, default=3)
     parser.add_argument("--margin", type=Decimal, default=Decimal("100"))
     parser.add_argument("--leverage", type=int, default=5)
-    parser.add_argument("--drawdown", type=Decimal, default=Decimal("25"))
+    parser.add_argument("--drawdown", type=Decimal, default=Decimal("25"), metavar="PERCENT",
+                        help="account drawdown limit (default: 25; 0 disables)")
     parser.add_argument("--mcp-port", type=int, help=tr(language, "usar consulta local via MCP na porta indicada"))
     parser.add_argument("--trade", action="store_true")
     parser.add_argument("--save-key", action="store_true", help=tr(language, "Salvar chave no cofre"))

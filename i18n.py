@@ -6,6 +6,15 @@ from string import Formatter
 LANGUAGES = {"pt": "Português", "en": "English", "es": "Español"}
 
 MESSAGES = {
+    "Fechamento pendente. Aguardando confirmação da Lighter.": (
+        "Pending close. Waiting for confirmation from Lighter.",
+        "Cierre pendiente. Esperando confirmación de Lighter."),
+    "Ordem {order} pendente. Aguardando confirmação da Lighter.": (
+        "Order {order} pending. Waiting for confirmation from Lighter.",
+        "Orden {order} pendiente. Esperando confirmación de Lighter."),
+    "Fechamento pausado: o histórico não confirma a mesma posição.": (
+        "Close paused: the history does not confirm the same position.",
+        "Cierre pausado: el historial no confirma que sea la misma posición."),
     "O diário não confirma que esta abertura pode ser reenviada.": (
         "The journal does not confirm that this entry can be retried.",
         "El registro no confirma que se pueda reintentar esta apertura."),
@@ -47,7 +56,7 @@ MESSAGES = {
     "Registro privado inválido ou adulterado.": (
         "Invalid or modified private record.", "Registro privado inválido o alterado."),
     "Buscar ativo": ("Find asset", "Buscar activo"),
-    "Limite de perda da conta (%)": ("Account drawdown limit (%)", "Límite de caída de la cuenta (%)"),
+    "Limite de perda (% · opcional)": ("Account loss limit (% · optional)", "Límite de pérdida (% · opcional)"),
     "Limite de perda da conta inválido.": ("Invalid account drawdown limit.", "Límite de caída de la cuenta inválido."),
     "Saldo total da conta indisponível.": ("Account equity unavailable.", "Patrimonio de la cuenta no disponible."),
     "Limite de perda da conta atingido. Automação pausada.": (

@@ -1,5 +1,7 @@
 # RECONNECT · Atualização e recuperação
 - O app consulta a cada cinco minutos, alinhado ao relógio, e tenta novamente a cada dois minutos quando leituras falham. Continua minimizado. Suspensão, desligamento ou fechamento do processo interrompem o monitor.
 - O cursor começa na ativação. Após reconectar, a última virada direcional fechada posterior ao cursor é elegível; viradas intermediárias são ignoradas. Usa o preço disponível no momento da execução. Cinza não apaga a virada.
-- O diário registra candle e ordem pendente antes do envio. Se a execução ficou incerta, o app pausa a automação para conciliação. Um novo processo começa em modo de acompanhamento.
+- O cofre grava mercado, candle, quantidade e último `trade_id` ao iniciar um fechamento. Cada tentativa grava `client_order_index` antes do envio. A retomada consulta a ordem pelo identificador e confere as execuções da conta no mesmo mercado.
+- A cada dois minutos, um fechamento pendente pode retomar somente o saldo da posição original, com `reduce_only`. Se a ordem estiver ativa ou sem confirmação, o app aguarda. Mudança no histórico ou na posição bloqueia o envio. A consulta direta da Lighter tem janela limitada para ordens encerradas. Se a identidade não for verificável, confira a posição na Lighter.
+- Após reiniciar, desbloqueie o cofre do perfil que tinha a automação ativa. A retomada só fecha a posição vinculada ao diário. Para novas entradas, reative as ordens automáticas. No terminal, use os mesmos parâmetros de `--trade` e da conta. A opção **Só acompanhar conta** desativa a retomada no perfil gráfico.
 - Código `Monitor.snapshot`, `take_signal` e `broker.execute`.

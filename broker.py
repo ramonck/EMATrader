@@ -26,6 +26,42 @@ def next_margin(base, used, pnl):
 RISK_HALT = "Limite de perda da conta atingido. Automação pausada."
 PRICE_CANCEL = "canceled-too-much-slippage"
 CLOSE_PENDING = "A posição ainda não zerou. A abertura inversa ficou bloqueada."
+CLOSE_UNCONFIRMED = "Fechamento pendente. Aguardando confirmação da Lighter."
+CLOSE_ORDER_UNCONFIRMED = "Ordem {order} pendente. Aguardando confirmação da Lighter."
+CLOSE_CHANGED = "Fechamento pausado: o histórico não confirma a mesma posição."
+
+
+def journal_path(root, network, account, symbol):
+    suffix = "" if symbol == "BTC" else f"-{symbol}"
+    return root / "Lighter" / f"{network}-{account}{suffix}.json"
+
+
+def saved_close(request):
+    vault = request.get("vault")
+    if vault is None:
+        return None
+    return vault.read(journal_path(vault.root, request["network"], request["account"], request["symbol"]), {}).get("close")
+
+
+async def close_trades(client, auth, account, market_id, count):
+    response = await client.order_api.trades("trade_id", count, authorization=auth,
+                                              account_index=account, market_id=market_id, sort_dir="desc")
+    return sorted(response.trades, key=lambda trade: trade.trade_id, reverse=True)
+
+
+def close_progress(trades, checkpoint, account, order_index, filled, selling):
+    recent = []
+    for trade in trades:
+        if trade.trade_id == checkpoint:
+            if sum((Decimal(row.size) for row in recent), Decimal(0)) == filled:
+                return recent[0].trade_id if recent else checkpoint
+            break
+        owner = trade.ask_account_id if selling else trade.bid_account_id
+        order = trade.ask_client_id if selling else trade.bid_client_id
+        if owner != account or order != order_index:
+            raise BridgeError(CLOSE_CHANGED)
+        recent.append(trade)
+    return None
 
 
 def retryable_entry(result):
@@ -104,8 +140,10 @@ async def ensure_account_flat(sdk, client, account, auth, state_path, vault):
     prefix = state_path.stem.split("-", 2)[:2]
     for journal in state_path.parent.glob("-".join(prefix) + "*.json"):
         name = journal.stem.split("-", 2)
-        if name[:2] == prefix and vault.read(journal).get("pending"):
-            raise BridgeError("Há uma execução pendente no diário desta conta.")
+        if name[:2] == prefix:
+            state = vault.read(journal)
+            if state.get("pending") or state.get("close"):
+                raise BridgeError("Há uma execução pendente no diário desta conta.")
     return snapshot
 
 
@@ -152,6 +190,72 @@ async def market_depth_price(client, market_id, selling, quantity):
     return last_price
 
 
+async def settle_close(client, request, account, auth, market_id, path, state, before, after, snapshot, order):
+    intent = state["close"]
+    settings = intent["settings"]
+    filled = Decimal(order.filled_base_amount)
+    if not 0 <= filled <= abs(before):
+        raise BridgeError(CLOSE_CHANGED)
+    if after != (abs(before) - filled) * (1 if before > 0 else -1):
+        return None
+    trades = await close_trades(client, auth, account, market_id, 100 if filled else 1)
+    checkpoint = close_progress(trades, intent["trade"], account, order.client_order_index, filled, before > 0)
+    if checkpoint is None:
+        return None
+    reinvestment = state.get("reinvestment", {})
+    margin = Decimal(settings["margin"])
+    report = {"position": str(after), "action": "Fechar long" if before > 0 else "Fechar short",
+              "filled": str(filled), "order": str(order.client_order_index),
+              "price": str(Decimal(order.filled_quote_amount) / filled) if filled else "0",
+              "status": order.status, "hash": intent.pop("hash", None), "time": order.updated_at,
+              "partial": bool(after)}
+    if intent["risk_halt"]:
+        report["risk_halt"] = True
+    if settings.get("compound") and not after and "before" in reinvestment:
+        available = Decimal(snapshot.available_balance)
+        if not available.is_finite() or any(Decimal(row.position) for row in snapshot.positions):
+            raise BridgeError("Não foi possível conciliar o saldo para reinvestir.")
+        pnl = available - Decimal(reinvestment["before"])
+        used = Decimal(reinvestment["next"]) if Decimal(reinvestment["base"]) == margin else margin
+        next_value = next_margin(margin, used, pnl)
+        state["reinvestment"] = {"base": str(margin), "next": str(next_value), "pnl": str(pnl)}
+        report.update(reinvestment_pnl_usd=str(pnl), next_margin_usd=str(next_value))
+    elif not settings.get("compound"):
+        state.pop("reinvestment", None)
+    candle = intent["candle"]
+    vault = request["vault"]
+    vault.append_order(dict(report, network=request["network"], account=account, symbol=request.get("symbol", "BTC"),
+                            candle=candle, trigger="Account drawdown" if intent["risk_halt"] else settings.get("trigger"),
+                            margin_usd=str(margin), leverage=int(settings["leverage"])))
+    state.pop("pending", None)
+    state.pop("action", None)
+    if after:
+        intent["trade"] = checkpoint
+    else:
+        state.pop("close")
+    vault.write(path, dict(state, position=str(after), candle=candle, last=report))
+    return report
+
+
+async def resume_pending_close(sdk, client, request, account, auth, market_id, path, state, current):
+    index = state["pending"]
+    orders = await client.order_api.account_orders(auth, str(index), account)
+    order = next((row for row in orders.orders if row.client_order_index == index), None)
+    if order is None or (order.status != "filled" and not order.status.startswith("canceled")):
+        raise BridgeError(CLOSE_ORDER_UNCONFIRMED.format(order=index))
+    if order.market_index != market_id or not order.reduce_only:
+        raise BridgeError(CLOSE_CHANGED)
+    settled = await account_snapshot(sdk, client, account)
+    after, _ = market_position(settled, market_id)
+    if after != current:
+        raise BridgeError(CLOSE_ORDER_UNCONFIRMED.format(order=index))
+    report = await settle_close(client, request, account, auth, market_id, path, state,
+                                Decimal(state["position"]), after, settled, order)
+    if report is None:
+        raise BridgeError(CLOSE_ORDER_UNCONFIRMED.format(order=index))
+    return report
+
+
 async def execute(sdk, client, request, account, key_index, state_path, continue_rotation=False):
     vault = request["vault"]
     result = await client.order_api.order_book_details()
@@ -168,6 +272,18 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
     snapshot = await account_snapshot(sdk, client, account)
     current, config = market_position(snapshot, market_id)
     state = vault.read(state_path, {"position": "0", "candle": -1})
+    intent = state.get("close")
+    recovering = command == "resume_close"
+    if recovering:
+        if not intent:
+            return {"position": str(current)}
+        if intent["market"] != market_id:
+            raise BridgeError(CLOSE_CHANGED)
+        if state.get("pending"):
+            return await resume_pending_close(sdk, client, request, account, auth, market_id, state_path, state, current)
+        if not current or Decimal(state["position"]) != current:
+            raise BridgeError(CLOSE_CHANGED)
+        continue_rotation = True
     if command == "check":
         blocked = None
         if request.get("single_position") and not current:
@@ -179,7 +295,7 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
                 "pending": bool(state.get("pending")), "blocked": blocked, "positions": public_positions(snapshot),
                 "ready": not state.get("pending") and Decimal(state["position"]) == current}
     if command == "arm":
-        if state.get("pending"):
+        if state.get("pending") or intent:
             raise BridgeError("O diário tem uma ordem pendente para este mercado. Concilie antes de assumir a posição.")
         if not current:
             await ensure_account_flat(sdk, client, account, auth, state_path, vault)
@@ -197,10 +313,19 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
         return {"ready": True, "position": str(current), "market": market_id, "positions": public_positions(snapshot)}
     if state.get("pending") or Decimal(state["position"]) != current:
         raise BridgeError("Estado da posição divergente ou ordem pendente. Confira a conta e o diário antes de retomar.")
-    risk_halt = request.get("drawdown") and account_risk(state_path, request, snapshot)
+    if intent and not (recovering or continue_rotation):
+        raise BridgeError(CLOSE_UNCONFIRMED)
+    risk_halt = intent["risk_halt"] if intent else bool(request.get("drawdown") and account_risk(state_path, request, snapshot))
     if (not current and risk_halt) or (command == "risk" and not risk_halt):
         return {"position": str(current), "risk_halt": bool(risk_halt)}
-    if risk_halt:
+    if intent:
+        if intent["market"] != market_id:
+            raise BridgeError(CLOSE_CHANGED)
+        request = dict(request, **intent["settings"])
+        command = "rotate"
+        candle = intent["candle"]
+        raw_direction = -1 if current > 0 else 1
+    elif risk_halt:
         candle = max(int(time.time() * 1000), state["candle"] + 1)
         raw_direction = -1 if current > 0 else 1
         command = "rotate"
@@ -238,6 +363,17 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
     closing = current != 0
     compound = request.get("compound") and command == "rotate"
     selling = current > 0 if closing else target < 0
+    if closing:
+        trades = await close_trades(client, auth, account, market_id, 1)
+        if not trades or (intent and trades[0].trade_id != intent["trade"]):
+            raise BridgeError(CLOSE_CHANGED)
+        if intent is None:
+            settings = {field: request[field] for field in ("margin", "leverage", "compound", "slippage", "trigger")
+                        if field in request}
+            intent = {"market": market_id, "trade": trades[0].trade_id, "candle": candle,
+                      "risk_halt": risk_halt, "settings": settings}
+            state["close"] = intent
+            vault.write(state_path, state)
     entry_levels = None
     if not closing and "prior_high" in request:
         entry_levels = (Decimal(str(request["prior_low"])), Decimal(str(request["prior_high"])))
@@ -300,32 +436,33 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
     limit = int(bound.to_integral_value(rounding=ROUND_CEILING if selling else ROUND_FLOOR))
     order_index = max(time.time_ns() // 1_000_000, int(state.get("last", {}).get("order", 0)) + 1)
     action = ("Fechar long" if current > 0 else "Fechar short") if closing else ("Abrir short" if selling else "Abrir long")
+    if closing:
+        trades = await close_trades(client, auth, account, market_id, 1)
+        if not trades or trades[0].trade_id != intent["trade"]:
+            raise BridgeError(CLOSE_CHANGED)
     vault.write(state_path, dict(state, position=str(current), candle=candle, pending=order_index, action=action))
     sent = acknowledge(await client.create_market_order(
         market_id, order_index, amount, limit, selling, reduce_only=closing, api_key_index=key_index), "ordem")
+    if closing:
+        intent["hash"] = sent.tx_hash
+        vault.write(state_path, dict(state, candle=candle, pending=order_index, action=action))
     for _ in range(12):
         await asyncio.sleep(1)
         orders = await client.order_api.account_inactive_orders(auth, account, 20, market_id)
         order = next((o for o in orders.orders if o.client_order_index == order_index), None)
         if order is None:
             continue
-        filled = Decimal(order.filled_base_amount)
-        expected = current + (-filled if selling else filled)
-        reinvestment = state.get("reinvestment")
-        if compound and closing and not expected and reinvestment and "before" in reinvestment:
+        if closing:
             settled = await account_snapshot(sdk, client, account)
             after, _ = market_position(settled, market_id)
-            if not after:
-                actual = Decimal(settled.available_balance)
-                if not actual.is_finite() or any(Decimal(row.position) for row in settled.positions):
-                    raise BridgeError("Não foi possível conciliar o saldo para reinvestir.")
-                pnl = actual - Decimal(reinvestment["before"])
-                used = Decimal(reinvestment["next"]) if Decimal(reinvestment["base"]) == base_margin else base_margin
-                reinvestment = {"base": str(base_margin), "next": str(next_margin(base_margin, used, pnl)),
-                                "pnl": str(pnl)}
-                state["reinvestment"] = reinvestment
-        else:
-            after, _ = await position(sdk, client, account, market_id)
+            report = await settle_close(client, request, account, auth, market_id, state_path, state,
+                                        current, after, settled, order)
+            if report is not None:
+                return report
+            continue
+        filled = Decimal(order.filled_base_amount)
+        expected = current + (-filled if selling else filled)
+        after, _ = await position(sdk, client, account, market_id)
         if after != expected:
             continue
         report = {"position": str(after), "action": action, "filled": str(filled), "order": str(order_index),
@@ -334,9 +471,7 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
                   "partial": filled < Decimal(amount) / size_scale}
         if risk_halt:
             report["risk_halt"] = True
-        if compound and closing and not after and reinvestment and "pnl" in reinvestment:
-            report.update(reinvestment_pnl_usd=reinvestment["pnl"], next_margin_usd=reinvestment["next"])
-        if compound and not closing and not after:
+        if compound and not after:
             state["reinvestment"].pop("before", None)
         audit = dict(report, network=request["network"], candle=candle,
                      trigger="Account drawdown" if risk_halt else request.get("trigger"), margin_usd=str(margin),
@@ -365,7 +500,7 @@ async def main(request):
         raise BridgeError("Índices de conta ou chave inválidos.")
     root = data_root() / "Lighter"
     root.mkdir(parents=True, exist_ok=True)
-    path = root / (f"{network}-{account}.json" if symbol == "BTC" else f"{network}-{account}-{symbol}.json")
+    path = journal_path(data_root(), network, account, symbol)
     if request["command"] == "check":
         return await connect(lighter, request, account, key_index, path)
     try:

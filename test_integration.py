@@ -10,6 +10,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import broker
+from app import credentials
 from backtest import replay
 from engine import STEP, Candle, Monitor, Signal
 from i18n import tr
@@ -19,6 +20,12 @@ from vault import ORDERS, PREFIX, Vault, VaultError
 
 
 class AdoptionTests(unittest.TestCase):
+    def test_zero_drawdown_disables_account_loss_limit(self):
+        config = credentials("BTC", "testnet", 1, "test", 3, Decimal(100), 5, Decimal(0))
+        self.assertIsNone(config["drawdown"])
+        with self.assertRaises(ValueError):
+            credentials("BTC", "testnet", 1, "test", 3, Decimal(100), 5, Decimal(-1))
+
     def test_price_cancel_requotes_once_without_doubling_a_partial_fill(self):
         request = {"network": "testnet", "key": "test", "command": "rotate", "candle": 4, "direction": -1}
         client = Row(check_client=lambda: None, close=AsyncMock())
@@ -167,9 +174,18 @@ class AdoptionTests(unittest.TestCase):
             receipt = Row(filled_base_amount="0.00123", filled_quote_amount="73.8",
                           status="filled", updated_at=3)
             send = AsyncMock(return_value=(None, Row(code=200, tx_hash="test"), None))
+
+            def trade_history(_sort, count, **_kwargs):
+                checkpoint = Row(trade_id=10)
+                if count == 1:
+                    return Row(trades=[checkpoint])
+                return Row(trades=[Row(trade_id=11, size="0.00123", bid_account_id=1,
+                                       bid_client_id=send.await_args.args[1]), checkpoint])
+
             client = Row(order_api=Row(
                 order_book_details=AsyncMock(return_value=Row(order_book_details=[market])),
                 account_active_orders=AsyncMock(return_value=Row(orders=[])),
+                trades=AsyncMock(side_effect=trade_history),
                 account_inactive_orders=AsyncMock(side_effect=lambda *_: Row(orders=[
                     Row(**vars(receipt), client_order_index=send.await_args.args[1])]))),
                 create_auth_token_with_expiry=lambda **_: ("token", None),
@@ -192,6 +208,51 @@ class AdoptionTests(unittest.TestCase):
             self.assertEqual(result["next_margin_usd"], "120")
             self.assertEqual(vault.read(path)["reinvestment"],
                              {"base": "100", "next": "120", "pnl": "20"})
+
+    def test_recovery_reconciles_exact_order_before_retrying_the_remaining_short(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            vault = Vault(root, b"x" * 32)
+            path = broker.journal_path(root, "mainnet", 1, "BTC")
+            intent = {"market": 1, "trade": 10, "candle": 2, "risk_halt": False,
+                      "settings": {"margin": "100", "leverage": 5}}
+            vault.write(path, {"position": "-2", "candle": 2, "close": intent,
+                               "pending": 123, "action": "Fechar short"})
+            market = Row(symbol="BTC", market_type="perp", status="active", market_id=1,
+                         size_decimals=2, price_decimals=2)
+            snapshot = Row(positions=[Row(market_id=1, position="1.50", sign=-1)])
+            receipt = Row(client_order_index=123, status="canceled-too-much-slippage", market_index=1,
+                          reduce_only=True, filled_base_amount="0.50", filled_quote_amount="50", updated_at=3)
+            trade = Row(trade_id=11, size="0.50", bid_account_id=1, bid_client_id=123)
+            orders = AsyncMock(return_value=Row(orders=[]))
+            send = AsyncMock(side_effect=TimeoutError)
+            client = Row(order_api=Row(order_book_details=AsyncMock(return_value=Row(order_book_details=[market])),
+                                      account_orders=orders, account_active_orders=AsyncMock(return_value=Row(orders=[])),
+                                      trades=AsyncMock(return_value=Row(trades=[trade, Row(trade_id=10)]))),
+                         create_auth_token_with_expiry=lambda **_: ("token", None), create_market_order=send)
+            request = {"command": "resume_close", "network": "mainnet", "symbol": "BTC", "vault": vault}
+            with (patch("broker.account_snapshot", AsyncMock(return_value=snapshot)),
+                  patch("broker.execution_quote", AsyncMock(return_value=Decimal(100))),
+                  patch("broker.market_depth_price", AsyncMock(return_value=Decimal(100)))):
+                with self.assertRaisesRegex(broker.BridgeError, "Ordem 123 pendente"):
+                    asyncio.run(broker.execute(None, client, request, 1, 3, path))
+                send.assert_not_called()
+                orders.return_value = Row(orders=[receipt])
+                report = asyncio.run(broker.execute(None, client, request, 1, 3, path))
+                self.assertEqual(report["position"], "-1.50")
+                self.assertEqual(vault.read(path)["close"]["trade"], 11)
+                send.assert_not_called()
+                # A different trade with the same account balance and short size cannot inherit the close.
+                client.order_api.trades.return_value = Row(trades=[Row(trade_id=12)])
+                with self.assertRaisesRegex(broker.BridgeError, "mesma posição"):
+                    asyncio.run(broker.execute(None, client, request, 1, 3, path))
+                send.assert_not_called()
+                client.order_api.trades.return_value = Row(trades=[trade])
+                with self.assertRaises(TimeoutError):
+                    asyncio.run(broker.execute(None, client, request, 1, 3, path))
+            self.assertEqual(send.await_args.args[2], 150)
+            self.assertTrue(send.await_args.kwargs["reduce_only"])
+            self.assertEqual(vault.read(path)["pending"], send.await_args.args[1])
 
 
 class KnowledgeAndMCPTests(unittest.TestCase):

@@ -99,7 +99,7 @@ class Vault:
         return self.unseal(path, ciphertext)
 
     def write(self, path, value):
-        with atomic_text(path) as file:
+        with atomic_text(path, durable=True) as file:
             file.write(self.seal(path, value))
 
     def append_order(self, value):

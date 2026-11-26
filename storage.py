@@ -32,7 +32,7 @@ def write(path, value):
 
 
 @contextmanager
-def atomic_text(path):
+def atomic_text(path, durable=False):
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=path.parent, delete=False, mode="w", encoding="utf-8") as file:
         temporary = Path(file.name)
@@ -45,7 +45,23 @@ def atomic_text(path):
             temporary.unlink(missing_ok=True)
             raise
     try:
-        temporary.replace(path)
+        if durable and sys.platform == "win32":
+            import ctypes
+            from ctypes import wintypes
+            move = ctypes.WinDLL("kernel32", use_last_error=True).MoveFileExW
+            move.argtypes = (wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD)
+            move.restype = wintypes.BOOL
+            replace_existing, write_through = 1, 8
+            if not move(str(temporary), str(path), replace_existing | write_through):
+                raise ctypes.WinError(ctypes.get_last_error())
+        else:
+            temporary.replace(path)
+            if durable:
+                directory = os.open(path.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory)
+                finally:
+                    os.close(directory)
     finally:
         temporary.unlink(missing_ok=True)
 
