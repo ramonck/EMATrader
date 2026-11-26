@@ -18,7 +18,7 @@ Monitor da faixa EMA Heikin Ashi de 15 minutos com execução opcional de perpé
 
 ## Compilar pelo GitHub
 
-Abra **Actions → Compilar EMA Trader → Run workflow**. Cada plataforma gera um pacote em **Artifacts**. O workflow não publica instaladores nem usa credenciais de corretora. Os pacotes macOS são builds de desenvolvimento e não incluem notarização da Apple.
+Os pacotes prontos ficam em **Releases**. Para gerar uma nova versão, abra **Actions → Compilar EMA Trader → Run workflow**. Após todas as plataformas passarem, o workflow cria a tag, publica a Release e anexa os cinco pacotes. Desmarque **Publicar a Release** para gerar apenas **Artifacts** temporários. O workflow não usa credenciais de corretora. Os pacotes macOS não incluem notarização da Apple.
 
 ## Rodar a partir do código
 

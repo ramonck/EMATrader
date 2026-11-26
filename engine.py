@@ -210,6 +210,9 @@ class Monitor:
         self.trade_error = ""
 
     def arm(self, config, expected=None):
+        fields = ("network", "account", "symbol")
+        if self.managed and any(config[field] != self.managed[field] for field in fields):
+            raise ValueError("Desative a automação atual antes de trocar de conta, rede ou ativo.")
         result = protected_request(config, command="check", single_position=True)
         if result.get("blocked"):
             raise ValueError(result["blocked"])
