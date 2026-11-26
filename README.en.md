@@ -4,6 +4,8 @@
 
 Monitor and optionally trade Lighter perpetuals using a 15-minute Heikin Ashi EMA band.
 
+**Educational use.** This project provides no financial advice or recommendations about assets, platforms, or trades. When using real funds, continuously monitor the bot, orders, and positions. If something goes wrong, disable automation if possible and manage or close the position in the [official Lighter interface](https://app.lighter.xyz/). [Use and risk notice](DISCLAIMER.md#english)
+
 ## Why EMA Trader?
 
 Elon Musk argues that advances in AI and robotics could make money irrelevant.
@@ -38,7 +40,7 @@ flowchart LR
         V["Local vault: API key"]
     end
     L["Lighter API and account"]
-    M["Binance for BTC / Lighter for other assets"]
+    M["Lighter market data: all assets"]
     B -->|"Connect wallet and deposit"| L
     V -->|"Key used to sign orders"| R
     M -->|"Public candles"| R
@@ -48,7 +50,7 @@ flowchart LR
 
 If Lighter is available to you, open **Deposit** before buying USDC. Note the asset, source network and minimum shown. Use the matching deposit route and check that the intended account receives the credit.
 
-**United States.** ACH is a way to fund a U.S. exchange from a verified bank account. Lighter’s terms restrict its interface and API for U.S. residents and people located in the U.S. The guide explains ACH separately from Lighter funding. [Coinbase ACH](https://help.coinbase.com/en/exchange/funding/depositing-with-ach) · [Lighter terms](https://lighter.xyz/terms)
+**Coinbase.** The guide covers ACH and how to send USDC to an eligible wallet or destination. Coinbase funding does not change the Lighter terms, which restrict its interface and API for U.S. residents and people located in the U.S. [Coinbase ACH](https://help.coinbase.com/en/exchange/funding/depositing-with-ach) · [Sending from Coinbase](https://help.coinbase.com/en-gb/coinbase/trading-and-funding/cryptocurrency-trading-pairs/steps-to-send-crypto) · [Lighter terms](https://lighter.xyz/terms)
 
 [Full deposit and setup guide](knowledge/en/LIGHTER.md)
 
@@ -78,6 +80,8 @@ python -m unittest -v
 ```
 
 ## BTC backtest · six months
+
+This historical simulation uses Binance Spot data. The running monitor uses Lighter candles, including for BTC.
 
 BTC/USDT on Binance Spot, 2026-05-24 to 2026-11-24 at 03:00 UTC. 15-minute EMA band with **$100 starting equity and base margin**. After a win, the next margin includes the realized profit. After a loss, the target resets to $100. Each entry is capped at available equity, with no top-ups.
 

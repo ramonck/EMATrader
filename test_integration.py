@@ -165,6 +165,7 @@ class KnowledgeAndMCPTests(unittest.TestCase):
         monitor.managed = {"symbol": "BTC", "key": "private-key-never-published"}
         candle = Candle(100, 1, 1.2, 0.8, 1.1, 2)
         monitor.market_state = {"BTC": ([candle], Signal(100, 1.02, 0.98, 0, 0, 1, 1, "AL"))}
+        monitor.market_state_network = "mainnet"
         service.publish(monitor, "SOL")
 
         def query(method, params=None, authenticated=True, origin=None):

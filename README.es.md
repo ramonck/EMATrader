@@ -4,6 +4,8 @@
 
 Monitor y ejecución opcional de perpetuos en Lighter con una banda EMA Heikin Ashi de 15 minutos.
 
+**Uso educativo.** Este proyecto no brinda asesoramiento financiero ni recomienda activos, plataformas u operaciones. Si usas dinero real, supervisa continuamente el robot, las órdenes y las posiciones. Si algo falla, desactiva la automatización si es posible y gestiona o cierra la posición en la [interfaz oficial de Lighter](https://app.lighter.xyz/). [Aviso de uso y riesgos](DISCLAIMER.md#español)
+
 ## ¿Por qué EMA Trader?
 
 Elon Musk cree que la IA y la robótica pueden hacer que el dinero pierda su relevancia.
@@ -38,7 +40,7 @@ flowchart LR
         V["Bóveda local: clave API"]
     end
     L["API y cuenta de Lighter"]
-    M["Binance para BTC / Lighter para otros activos"]
+    M["Datos de mercado de Lighter: todos los activos"]
     B -->|"Conectar billetera y depositar"| L
     V -->|"Clave para firmar órdenes"| R
     M -->|"Velas públicas"| R
@@ -48,7 +50,7 @@ flowchart LR
 
 Abre **Depositar** antes de comprar USDC. Revisa el activo, la red de origen y el importe mínimo que indica la pantalla. Usa la ruta compatible y comprueba que se acredite la cuenta correcta.
 
-**Países hispanohablantes.** Deposita moneda local en una plataforma disponible en tu país y compra USDC. Por ejemplo, Bitso documenta SPEI en México, transferencias a un CVU en Argentina y depósitos mediante Bancolombia en Colombia. [México](https://support.bitso.com/hc/es-mx/articles/4415147781012-C%C3%B3mo-hacer-una-transferencia-SPEI-en-pesos-mexicanos) · [Argentina](https://support.bitso.com/hc/es-ar/articles/51158963807124--C%C3%B3mo-deposito-pesos-argentinos-ARS) · [Colombia](https://support.bitso.com/hc/es-co/articles/53399222316436-C%C3%B3mo-depositar-pesos-colombianos-COP)
+**Países hispanohablantes.** Coinbase es una alternativa donde tu cuenta permita comprar y enviar USDC. Consulta los métodos disponibles en tu país. La guía también incluye ejemplos de SPEI en México, CVU en Argentina y Bancolombia en Colombia. [Envíos desde Coinbase](https://help.coinbase.com/es-es/coinbase/trading-and-funding/cryptocurrency-trading-pairs/steps-to-send-crypto)
 
 [Guía completa de depósito y configuración](knowledge/es/LIGHTER.md)
 
@@ -78,6 +80,8 @@ python -m unittest -v
 ```
 
 ## Backtest de BTC · seis meses
+
+Esta simulación histórica usa datos de Binance Spot. El monitor en ejecución usa velas de Lighter, incluido BTC.
 
 BTC/USDT en Binance Spot, del 24/05/2026 al 24/11/2026 a las 03:00 UTC. Banda EMA de 15 minutos con **US$ 100 de saldo inicial y margen base**. Tras una ganancia, el siguiente margen incorpora el beneficio realizado. Tras una pérdida, el objetivo vuelve a US$ 100. Cada entrada se limita al saldo disponible, sin aportes.
 

@@ -14,7 +14,6 @@ from storage import account_lock, data_root, read, write
 STEP = 900_000
 RETRY = 120
 NORMAL_REFRESH = 300
-BINANCE = "https://data-api.binance.vision/api/v3/"
 
 
 def get(url, query=None):
@@ -67,17 +66,18 @@ def shared_fetch(path, loader, lifetime):
             lock.__exit__(None, None, None)
 
 
-def markets():
-    path = data_root() / "catalog.json"
+def markets(network="mainnet"):
+    name = "catalog.json" if network == "mainnet" else f"catalog-{network}.json"
+    path = data_root() / name
     cached = read(path, {})
 
     def load():
-        try:
-            return get(broker.NETWORKS["mainnet"] + "/api/v1/orderBookDetails")["order_book_details"]
-        except (OSError, ValueError):
-            return cached.get("data", [])
+        return get(broker.NETWORKS[network] + "/api/v1/orderBookDetails")["order_book_details"]
 
-    items = shared_fetch(path, load, 7 * 86400 if cached.get("data") else RETRY)
+    try:
+        items = shared_fetch(path, load, 7 * 86400 if cached.get("data") else RETRY)
+    except (OSError, ValueError):
+        items = cached.get("data", [])
     return {row["symbol"]: row["market_id"] for row in items
             if row["market_type"] == "perp" and row["status"] == "active"
             and re.fullmatch(r"[A-Z0-9_-]{1,32}", row["symbol"])}
@@ -131,20 +131,17 @@ def ema_scalping(candles):
     return points
 
 
-def candles_for(symbol, interval=15):
+def candles_for(symbol, interval=15, network="mainnet"):
     symbol_key(symbol)
     close_step = interval * 60_000
-    path = data_root() / "quotes" / f"{symbol}-{interval}.json"
+    path = data_root() / "quotes" / f"lighter-{network}-{symbol}-{interval}.json"
 
     def load():
         limit = now_ms()
-        if symbol == "BTC":
-            rows = get(BINANCE + "klines", {"symbol": "BTCUSDT", "interval": f"{interval}m", "limit": 1000})
-            return [asdict(Candle(int(row[6]) + 1, *map(float, row[1:6]))) for row in rows if int(row[6]) + 1 <= limit]
-        market_id = markets().get(symbol)
+        market_id = markets(network).get(symbol)
         if market_id is None:
             raise ValueError(f"{symbol}: mercado indisponível no catálogo da Lighter.")
-        response = get(broker.NETWORKS["mainnet"] + "/api/v1/candles", {
+        response = get(broker.NETWORKS[network] + "/api/v1/candles", {
             "market_id": market_id, "resolution": f"{interval}m", "count_back": 500,
             "start_timestamp": limit - 500 * close_step, "end_timestamp": limit, "set_timestamp_to_end": "false",
         })
@@ -189,6 +186,11 @@ class Monitor:
         self.return_at = 0
         self.trade_error = ""
         self.market_state = {}
+        self.market_state_network = None
+
+    @property
+    def market_network(self):
+        return self.account[0] if self.account else "mainnet"
 
     def arm(self, config, on_ready=None):
         fields = ("network", "account", "symbol")
@@ -208,11 +210,15 @@ class Monitor:
         self.last_action = None
         errors = []
         managed = self.managed
+        network = self.market_network
+        if network != self.market_state_network:
+            self.market_state = {}
+            self.market_state_network = network
         watched = {selected} | ({managed["symbol"]} if managed else set())
         results = {}
         for symbol in watched:
             try:
-                candles = candles_for(symbol)
+                candles = candles_for(symbol, network=network)
                 points = ema_scalping(candles)
                 if not points or now_ms() - points[-1].time > 2 * STEP:
                     raise ValueError("Candles fechados desatualizados.")
@@ -251,7 +257,7 @@ class Monitor:
             candles, points = results[selected]
             latest = points[-1]
             self.last_action = latest
-            path = data_root() / "history" / f"{selected}.json"
+            path = data_root() / "history" / f"lighter-{network}-{selected}.json"
             record = {"at": now_ms(), "close": candles[-1].close, "signal": asdict(latest)}
             write(path, record)
         else:

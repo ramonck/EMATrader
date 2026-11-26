@@ -3,6 +3,7 @@
 Open only relevant topics. IDs are stable across languages.
 
 - [LIGHTER · Lighter beginner guide](LIGHTER.md)
+- [RISK · Use and risk notice](RISK.md)
 - [ARCH · Structure and flows](ARCH.md)
 - [SIGNALS · 15-minute EMA band](SIGNALS.md)
 - [ORDERS · Real positions, adoption and execution](ORDERS.md)

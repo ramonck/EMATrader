@@ -18,6 +18,7 @@ USDC is a stablecoin designed to track the U.S. dollar. The network is the route
 
 ## Buying USDC by bank transfer
 
+- **Sending from Coinbase.** Once USDC is available to send, open the asset’s balance and choose **Send**. Enter the amount, select the supported network, enter the receiving address for the route, and verify the network, destination and fees before confirming. For a route starting in your wallet, use your own wallet address. The [Lighter terms](https://lighter.xyz/terms) apply independently of Coinbase. [Coinbase send guide](https://help.coinbase.com/en-gb/coinbase/trading-and-funding/cryptocurrency-trading-pairs/steps-to-send-crypto)
 - **United States and ACH.** ACH moves U.S. dollars between bank accounts and an eligible U.S. exchange. Coinbase Exchange, for example, documents linking a verified bank account, choosing USD and requesting a bank deposit. You can then buy USDC if available. An exchange can hold withdrawals until the deposit clears. Lighter’s terms restrict its interface and API for U.S. residents and people located in the U.S. This example describes ACH funding at the exchange. [Coinbase ACH](https://help.coinbase.com/en/exchange/funding/depositing-with-ach) · [Lighter terms](https://lighter.xyz/terms)
 - **Where Lighter is available.** Use a provider serving your jurisdiction, credit local currency by bank transfer and buy USDC. Check whether the provider can send the required USDC token on a network offered by the Lighter deposit screen. Review the withdrawal fee and net amount before sending.
 
@@ -27,5 +28,13 @@ USDC is a stablecoin designed to track the U.S. dollar. The network is the route
 2. In EMA Trader, open **Settings → Orders** and unlock the vault. Select **Mainnet** for the live account. Enter its account index and choose **Monitor account only** to check the position. Check the available balance in the Lighter interface.
 3. To test orders with test funds, use Testnet and create a key for that network. To enable orders, enter the API private key, base margin and leverage in the app. Keep your wallet recovery phrase outside the app.
 4. Keep EMA Trader running to monitor and execute signals. You can close the browser after account setup.
+
+## Trading with real funds
+
+When using real funds, continuously monitor positions, orders, and bot activity in the correct account. Disable automatic orders if you cannot monitor them. Use [Testnet](https://testnet.app.lighter.xyz/) to practice with test funds.
+
+If the bot fails or disagrees with the account, disable automation or close the app if possible. Open [app.lighter.xyz](https://app.lighter.xyz/), check the account and its open orders, and manually close the position that needs to be closed. Confirm on Lighter that the position is flat and there are no unwanted pending orders before reactivating.
+
+[Use and risk notice](RISK.md)
 
 [Open Testnet](https://testnet.app.lighter.xyz/) · [ORDERS](ORDERS.md) · [SUBACCOUNTS](SUBACCOUNTS.md) · [DATA](DATA.md)

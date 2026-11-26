@@ -3,6 +3,7 @@
 Abre solo los temas pertinentes. Los ID son iguales en los tres idiomas.
 
 - [LIGHTER · Lighter para principiantes](LIGHTER.md)
+- [RISK · Aviso de uso y riesgos](RISK.md)
 - [ARCH · Estructura y flujos](ARCH.md)
 - [SIGNALS · Banda EMA de 15 min](SIGNALS.md)
 - [ORDERS · Posición real, adopción y ejecución](ORDERS.md)

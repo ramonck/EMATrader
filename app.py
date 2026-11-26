@@ -185,6 +185,7 @@ def gui(profile="DEFAULT", language=None):
     browse_until = 0
     last_chart = None
     last_view = None
+    last_network = None
     assets = ("BTC",)
 
     toolbar = ttk.Frame(root, padding=(18, 12))
@@ -303,14 +304,19 @@ def gui(profile="DEFAULT", language=None):
         symbol = selected.get()
 
         def update():
+            network = monitor.market_network
             result = monitor.snapshot(symbol)
             if mcp.port:
                 mcp.publish(monitor, symbol)
-            return result, sorted(set(markets()) | {"BTC", symbol})
+            return result, sorted(set(markets(network)) | {symbol}), network
 
         def show(result):
-            nonlocal last_view, assets
-            (candles, points, orders, errors), catalog = result
+            nonlocal last_view, last_chart, last_network, assets
+            (candles, points, orders, errors), catalog, network = result
+            if network != last_network:
+                last_chart = None
+                last_network = network
+                draw()
             assets = catalog
             filter_assets()
             last_view = symbol, candles, points, errors

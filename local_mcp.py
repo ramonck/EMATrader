@@ -67,7 +67,8 @@ class LocalMCP:
     def publish(self, monitor, selected):
         candles = {}
         markets = {}
-        for symbol, (rows, point) in monitor.market_state.items():
+        current_market = monitor.market_state if monitor.market_state_network == monitor.market_network else {}
+        for symbol, (rows, point) in current_market.items():
             candles[symbol] = [asdict(row) for row in rows]
             last = rows[-1]
             preceding = rows[:-1]
@@ -83,6 +84,7 @@ class LocalMCP:
             }
         snapshot = {"viewed_asset": selected, "managed_asset": (monitor.managed or {}).get("symbol"),
                     "network": monitor.account[0] if monitor.account else None,
+                    "market_data_network": monitor.market_network,
                     "account_checked_ms": monitor.closed_at or None,
                     "positions": [row.copy() for row in monitor.position_rows[:12]],
                     "position_count": len(monitor.position_rows),

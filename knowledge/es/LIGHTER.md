@@ -18,6 +18,7 @@ USDC es una moneda estable diseñada para seguir el valor del dólar estadounide
 
 ## Comprar USDC con moneda local
 
+- **Coinbase.** Consulta en tu cuenta si puedes añadir fondos, comprar USDC y enviarlo desde tu país. Cuando el USDC esté disponible, elige **Enviar**, introduce el importe y la dirección de destino, selecciona la red admitida por la ruta y revisa la comisión. Si la ruta empieza en tu billetera, utiliza tu propia dirección. [Métodos de financiación](https://help.coinbase.com/es-es/coinbase/trading-and-funding/depositing-or-withdrawing-fiat-money/funding-your-account-namerica-latam?is_mobile_app=true) · [Guía de envío](https://help.coinbase.com/es-es/coinbase/trading-and-funding/cryptocurrency-trading-pairs/steps-to-send-crypto)
 - **México.** Desde la sección de depósitos de tu plataforma, obtén la CLABE que te indique. Haz una transferencia SPEI desde una cuenta a tu nombre. Cuando se acredite el saldo, verifica que puedas comprar USDC y retirarlo por la red que necesitas. [SPEI en Bitso](https://support.bitso.com/hc/es-mx/articles/4415147781012-C%C3%B3mo-hacer-una-transferencia-SPEI-en-pesos-mexicanos)
 - **Argentina.** Usa el CVU de depósito que muestre tu cuenta y envía ARS desde tu banco o aplicación de pagos a tu nombre. [Depósitos en Bitso Argentina](https://support.bitso.com/hc/es-ar/articles/51158963807124--C%C3%B3mo-deposito-pesos-argentinos-ARS)
 - **Colombia.** Usa el método de depósito en COP que aparezca en tu cuenta. Bitso documenta el flujo vía Bancolombia. [Depósitos en Bitso Colombia](https://support.bitso.com/hc/es-co/articles/53399222316436-C%C3%B3mo-depositar-pesos-colombianos-COP)
@@ -29,5 +30,13 @@ USDC es una moneda estable diseñada para seguir el valor del dólar estadounide
 2. En EMA Trader, abre **Configuración → Órdenes** y desbloquea la bóveda. Selecciona **Mainnet** para la cuenta real. Introduce el índice de cuenta y elige **Solo seguir la cuenta** para comprobar la posición. Comprueba el saldo disponible en la interfaz de Lighter.
 3. Para probar órdenes con fondos de prueba, utiliza Testnet y una clave creada en esa red. Para activar órdenes, introduce la clave privada de API, el margen base y el apalancamiento en el programa. Guarda la frase de recuperación de la billetera fuera de la aplicación.
 4. Mantén EMA Trader abierto para vigilar y ejecutar señales. Puedes cerrar el navegador después de configurar la cuenta.
+
+## Operaciones con dinero real
+
+Si usas dinero real, supervisa continuamente las posiciones, las órdenes y la actuación del robot en la cuenta correcta. Desactiva las órdenes automáticas si no puedes supervisarlas. Usa [Testnet](https://testnet.app.lighter.xyz/) para practicar con saldo de prueba.
+
+Si el robot falla o discrepa del saldo real, desactiva la automatización o cierra la aplicación si es posible. Abre [app.lighter.xyz](https://app.lighter.xyz/), comprueba la cuenta y sus órdenes abiertas y cierra manualmente la posición que necesites cerrar. Confirma en Lighter que la posición haya quedado en cero y que no queden órdenes pendientes no deseadas antes de reactivar.
+
+[Aviso de uso y riesgos](RISK.md)
 
 [Abrir Testnet](https://testnet.app.lighter.xyz/) · [ORDERS](ORDERS.md) · [SUBACCOUNTS](SUBACCOUNTS.md) · [DATA](DATA.md)

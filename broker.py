@@ -192,7 +192,7 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
     if current * target > 0:
         return {"position": str(current)}
     if not current and not request.get("allow_open", True):
-        return {"position": "0", **({"entry_skipped": "Binance"} if request.get("entry_signal") else {})}
+        return {"position": "0", **({"entry_skipped": "entrada desativada"} if request.get("entry_signal") else {})}
     if current and request.get("only_open", False):
         return {"position": str(current)}
     active = await client.order_api.account_active_orders(auth, account, market_id)

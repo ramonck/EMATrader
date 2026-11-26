@@ -18,6 +18,7 @@ USDC é uma stablecoin que busca acompanhar o dólar americano. A rede é o cami
 
 ## Comprar USDC com reais
 
+- **Coinbase Brasil.** Cadastre o Pix na conta verificada, gere a solicitação de depósito de BRL e conclua o pagamento pelo seu banco. Após o crédito, compre ou converta para USDC. No saldo de USDC, escolha **Enviar**, informe o valor, selecione a rede compatível com a rota do depósito e revise o endereço, o destinatário e as taxas. Siga as verificações de destinatário que a Coinbase pedir no Brasil. Se a rota começar na sua carteira, informe o endereço da sua própria carteira. [Pix na Coinbase](https://help.coinbase.com/pt-br/coinbase/getting-started/add-a-payment-method/add-and-verify-pm-namerica-latam) · [Como enviar cripto no Brasil](https://help.coinbase.com/pt-br/coinbase/trading-and-funding/sending-or-receiving-cryptocurrency/send-receive-crypto-brazil)
 - **Pix pela Binance Brasil ou OKX Brasil.** Verifique sua conta, abra o depósito de BRL e use o código Pix gerado na tela, a partir de uma conta bancária em seu nome. Depois que os reais aparecerem, compre ou converta para USDC. Na tela de saque confira o token, a rede, a taxa e o valor líquido recebido. [Guia da Binance Brasil](https://www.binance.com/pt-BR/support/faq/detail/53636607eebc42dbb513863b49bba98f) · [Guia da OKX Brasil](https://www.okx.com/pt-br/help/how-do-i-deposit-brl)
 - **CriptoCore.** A documentação pública mostra depósito de cripto, crédito em USDT e uso desse saldo para pagar ou sacar via Pix em reais. Para financiar a Lighter com BRL, use a rota de Pix de entrada documentada acima. [CriptoCore](https://criptocore.net/)
 
@@ -27,5 +28,13 @@ USDC é uma stablecoin que busca acompanhar o dólar americano. A rede é o cami
 2. No EMA Trader, abra **Configurações → Ordens** e desbloqueie o cofre. Selecione **Mainnet** para a conta real. Informe o índice da conta e use **Só acompanhar conta** para verificar a posição. Confira o saldo disponível na interface da Lighter.
 3. Para testar ordens com saldo de teste, use a Testnet e uma chave criada nessa rede. Para habilitar ordens, informe a chave privada da API, a margem base e a alavancagem no app. Guarde a frase de recuperação da carteira fora do app.
 4. Mantenha o EMA Trader aberto para monitorar e executar sinais. O navegador pode ser fechado após configurar a conta.
+
+## Operações com dinheiro real
+
+Ao usar dinheiro real, acompanhe continuamente as posições, as ordens e a atuação do robô na conta correta. Se não puder acompanhar, desative as ordens automáticas. Use a [Testnet](https://testnet.app.lighter.xyz/) para aprender o fluxo com saldo de teste.
+
+Se o robô falhar ou divergir da conta, desative a automação ou feche o app, se possível. Abra [app.lighter.xyz](https://app.lighter.xyz/), confira a conta e as ordens abertas e encerre manualmente a posição que precisa fechar. Confirme na Lighter que a posição zerou e que não há ordens pendentes indesejadas antes de reativar.
+
+[Aviso de uso e riscos](RISK.md)
 
 [Abrir a Testnet](https://testnet.app.lighter.xyz/) · [ORDERS](ORDERS.md) · [SUBACCOUNTS](SUBACCOUNTS.md) · [DATA](DATA.md)

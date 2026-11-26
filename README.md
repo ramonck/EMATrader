@@ -4,6 +4,8 @@
 
 Monitor e execução opcional de perpétuos na Lighter com a faixa EMA Heikin Ashi de 15 minutos.
 
+**Uso educacional.** Este projeto não oferece aconselhamento financeiro nem recomenda ativos, plataformas ou operações. Ao usar dinheiro real, acompanhe continuamente o robô, as ordens e as posições. Em caso de falha, desative a automação, se possível, e gerencie ou encerre a posição pela [interface oficial da Lighter](https://app.lighter.xyz/). [Aviso de uso e riscos](DISCLAIMER.md#português)
+
 ## Por que o EMA Trader?
 
 Elon Musk acredita que a IA e a robótica podem tornar o dinheiro irrelevante.
@@ -38,7 +40,7 @@ flowchart LR
         V["Cofre local: chave de API"]
     end
     L["API e conta Lighter"]
-    M["Binance para BTC / Lighter para outros ativos"]
+    M["Dados de mercado Lighter: todos os ativos"]
     B -->|"Conectar carteira e depositar"| L
     V -->|"Chave para assinar ordens"| R
     M -->|"Candles públicos"| R
@@ -48,7 +50,7 @@ flowchart LR
 
 Abra **Depositar** na Lighter antes de comprar USDC. Anote o token, a rede de origem e o valor mínimo que a tela mostra. Depois use a rota compatível para depositar e confira se o saldo apareceu na conta certa.
 
-**Brasil.** Deposite reais por Pix na Binance Brasil ou OKX Brasil, compre USDC e confira se a rede de saque coincide com a rota exibida pela Lighter. A CriptoCore documenta pagamentos em reais por Pix a partir de saldo cripto. [Binance Brasil](https://www.binance.com/pt-BR/support/faq/detail/53636607eebc42dbb513863b49bba98f) · [OKX Brasil](https://www.okx.com/pt-br/help/how-do-i-deposit-brl) · [CriptoCore](https://criptocore.net/)
+**Brasil.** Coinbase Brasil, Binance Brasil e OKX Brasil documentam depósito de reais por Pix. Depois de comprar USDC, confira a rede e o envio na corretora antes de iniciar o depósito na Lighter. A CriptoCore documenta pagamentos em reais por Pix a partir de saldo cripto. [Coinbase Brasil](https://help.coinbase.com/pt-br/coinbase/getting-started/add-a-payment-method/add-and-verify-pm-namerica-latam) · [Binance Brasil](https://www.binance.com/pt-BR/support/faq/detail/53636607eebc42dbb513863b49bba98f) · [OKX Brasil](https://www.okx.com/pt-br/help/how-do-i-deposit-brl) · [CriptoCore](https://criptocore.net/)
 
 [Guia completo de depósito e configuração](knowledge/pt/LIGHTER.md)
 
@@ -78,6 +80,8 @@ python -m unittest -v
 ```
 
 ## Backtest de BTC · seis meses
+
+A fonte desta simulação histórica é a Binance Spot. O monitor em execução usa candles da Lighter, inclusive para BTC.
 
 BTC/USDT da Binance Spot, de 24/05 a 24/11/2026 às 00h de Brasília. Faixa EMA de 15 minutos, **US$ 100 de saldo inicial e de margem base**. Após lucro, a próxima margem incorpora o ganho realizado. Após perda, a meta volta a US$ 100. Cada entrada usa até o saldo disponível, sem aportes na simulação.
 

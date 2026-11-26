@@ -1,7 +1,7 @@
 # DATA · Catálogo, caché y registros
 - Escribe un código como BTC o NVDA en **Buscar activo** para filtrar el catálogo. La coincidencia exacta va primero. **Enter** selecciona el primer resultado sin cambiar el activo gestionado.
 - `Lighter/risk/` guarda el máximo del saldo y la pausa por caída por red y cuenta. El registro del mercado guarda el saldo de referencia y el margen de reinversión. [ORDERS](ORDERS.md)
-- El selector muestra símbolos perpetuos activos de Lighter. El catálogo en disco dura siete días. Cada activo e intervalo tiene una caché breve compartida y un bloqueo local.
+- El selector muestra símbolos perpetuos activos de Lighter. El catálogo en disco dura siete días. Cada activo e intervalo tiene una caché breve compartida y un bloqueo local. El catálogo y las velas provienen exclusivamente de Lighter. Las cachés de Mainnet y Testnet están separadas entre sí y de los archivos anteriores.
 - `EMA_TRADER_DATA_DIR` cambia la raíz. Predeterminados: `%LOCALAPPDATA%/EMATrader` en Windows, `~/Library/Application Support/EMATrader` en macOS y `$XDG_STATE_HOME/ema-trader` o `~/.local/state/ema-trader` en Linux.
 - `profiles/` / `ui-profiles/`: preferencias de la ventana. `quotes/`: caché de velas. `history/`: última señal por activo. `Lighter/`: registros y bloqueos por red y cuenta. `operacoes-lighter.jsonl`: ejecuciones conciliadas.
 - Las claves de Lighter, los perfiles de cuenta y los registros privados en disco se cifran con AES-256-GCM. Scrypt deriva la clave de la bóveda de la frase secreta. Cada registro autentica la ruta de su archivo. Para recuperar la bóveda es necesaria la frase secreta.

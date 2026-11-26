@@ -51,6 +51,30 @@ class EngineTests(unittest.TestCase):
             self.assertEqual(engine.shared_fetch(path, load, 30), [1, 2, 3])
             self.assertEqual(len(calls), 1)
 
+    def test_btc_uses_lighter_and_caches_by_network(self):
+        now = 1_800_000_000_000
+        def get(url, query=None):
+            network = "testnet" if "testnet" in url else "mainnet"
+            self.assertTrue(url.startswith(engine.broker.NETWORKS[network]))
+            market_id = 7 if network == "testnet" else 1
+            price = 101 if network == "testnet" else 100
+            if url.endswith("/orderBookDetails"):
+                return {"order_book_details": [{"symbol": "BTC", "market_type": "perp", "status": "active",
+                                                "market_id": market_id}]}
+            self.assertTrue(url.endswith("/candles"))
+            self.assertEqual(query["market_id"], market_id)
+            return {"c": [{"t": t, "o": price, "h": price + 1, "l": price - 1, "c": price, "v": 2}
+                          for t in (now - engine.STEP, now)]}
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"EMA_TRADER_DATA_DIR": directory}):
+            old = Path(directory) / "quotes" / "BTC-15.json"
+            engine.write(old, {"at": now / 1000, "data": [{"close": 9}]})
+            with patch("engine.get", side_effect=get) as requests, patch("engine.now_ms", return_value=now):
+                self.assertEqual([row.close for row in engine.candles_for("BTC")], [100])
+                self.assertEqual([row.close for row in engine.candles_for("BTC", network="testnet")], [101])
+                self.assertEqual([row.close for row in engine.candles_for("BTC")], [100])
+                self.assertEqual(requests.call_count, 4)
+
 
 if __name__ == "__main__":
     unittest.main()
