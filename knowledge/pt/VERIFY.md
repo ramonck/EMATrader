@@ -1,4 +1,5 @@
 # VERIFY · Validação e manutenção
 - Rode `python -m unittest -v`. A suíte valida faixa/cinza, viradas perdidas, cache local, adoção e MCP com dados simulados. Compilar testa o terminal empacotado nas cinco plataformas.
 - Mudou uma regra? Atualize o mesmo ID nos três idiomas. Se um índice ou link mudar, atualize o README e rode a suíte. Para validar Mainnet, exija uma autorização separada e confira a posição real.
-- Compare estratégias com dados locais, custos e período explícitos. Os testes de software não medem rentabilidade. Os arquivos privados de mercado, diagnósticos e credenciais ficam fora do Git.
+- Para aprovar uma mudança na lógica, compare o código em produção e a candidata no mesmo arquivo local de perpétuos da Lighter, com as mesmas datas, custos, tamanho, alavancagem e proteção. Use o [cenário de referência](BACKTEST.md) e defina a janela de validação antes do teste. Exija ROI estritamente maior na referência e ausência de regressão na validação. Registre ROI, drawdown, operações e comando de reprodução. ROI igual, inferior ou sem evidência mantém a regra vigente.
+- Os testes de software validam o comportamento. O README publica só o ROI simulado da regra atual com dados da Lighter. Os arquivos privados de mercado, diagnósticos e credenciais ficam fora do Git.

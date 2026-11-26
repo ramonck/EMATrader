@@ -1,22 +1,12 @@
-# BACKTEST · Backtest de BTC · seis meses
+# BACKTEST · BTC perpétuo na Lighter · seis meses
 
-- O CSV local contém candles BTCUSDT de 5 min da Binance Spot, com `open_time_ms,open,high,low,close,volume,close_time_ms`. O script agrega três candles por barra de 15 min. O trecho anterior a 24/05 aquece os indicadores. O período começa sem posição e executa cada virada na abertura seguinte ao fechamento do sinal.
-- Custos hipotéticos sobre o valor nominal em cada entrada e saída. O cenário comparativo usa 1× e capital composto. Não modela spread, slippage, funding, liquidação, atraso nem a diferença de preço entre Binance Spot e os perpétuos da Lighter. Simulação histórica, sem extrapolação para operações reais.
-- Queda máxima medida nos fechamentos de 15 min. A 0,01% por lado, operações já fechadas somaram +24,12% e comprar e manter BTC deu −21,83% com o mesmo custo. A posição que sobrou ficou em short. A diferença entre as duas linhas demonstra a sensibilidade ao custo.
-
-- Com `--compound`, o saldo inicial e a margem base são US$ 100 a 10×. Após ganho realizado, soma-se o ganho à margem usada. Após perda, a meta volta à base. A entrada é limitada ao saldo disponível. O ROI é o saldo final marcado dividido pelo inicial, menos um. A queda máxima é medida nos fechamentos. O teste não injeta capital nem impõe o mínimo de ordem da Lighter.
-
-- Sem trava, a 10×, o ROI foi −51,25% e −96,52%, com quedas de 95,11% e 99,49% a 0,01% e 0,05% por lado. Com stop individual de 20% da margem a 10× e custo de 0,01%, o ROI foi −53,71% e a queda 94,95%. O stop individual é uma opção do simulador. A trava da conta é a proteção usada no app.
+- Fonte exclusiva: BTC perpétuo da Lighter Mainnet, mercado 1, candles de 15 min. O CSV local `Lighter-BTC-PERP-15m-20260513T0300Z--20261124T0300Z.csv` contém 18.720 barras contínuas. O teste cobre 24/05/2026 a 24/11/2026 às 03:00 UTC, com 17.664 barras e aquecimento desde 13/05. Colunas `open_time_ms,open,high,low,close,volume`. [API oficial de candles](https://github.com/elliottech/lighter-python/blob/main/docs/CandlestickApi.md)
+- Cenário de referência: US$ 100 de saldo inicial e margem base, 10×, reinvestimento, custo simulado de 0,05% por lado e trava de perda desativada. O modelo começa zerado, executa na abertura seguinte, limita a margem ao patrimônio disponível e marca a posição restante no fim. ROI = saldo final marcado ÷ saldo inicial − 1. Drawdown medido nos fechamentos de 15 min. Funding, slippage, liquidação e tamanho mínimo de ordem ficam fora do modelo.
+- Comparação no mesmo arquivo: regra original −96,81% de ROI, 99,51% de drawdown, 316 operações fechadas. Regra v0.1.14 +454,91%, 82,04% de drawdown, 163 operações fechadas. Na janela de 24/08 a 24/11, reiniciando zerado com US$ 100, o ROI foi −72,52% na referência original e +135,80% na v0.1.14.
+- A regra de produção exige tendência long na última barra de 1h fechada e fechamento real de 15 min acima da abertura e da faixa superior para virar de short para long. [SIGNALS](SIGNALS.md) · [Critério para mudanças futuras](VERIFY.md)
 
 ```sh
-python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --fee-bps 1 --margin-usd 100 --leverage 1 --compound --max-account-drawdown 25
-python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --fee-bps 1 --margin-usd 100 --leverage 10 --compound --max-account-drawdown 25
-python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --fee-bps 1 --margin-usd 100 --leverage 10 --compound --stop-loss 20
-python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --fee-bps 1 --margin-usd 100 --leverage 10 --compound
-python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --fee-bps 5 --margin-usd 100 --leverage 10 --compound
-
-python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --fee-bps 1
-python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --fee-bps 5
+python backtest.py Lighter-BTC-PERP-15m-20260513T0300Z--20261124T0300Z.csv --input-minutes 15 --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --margin-usd 100 --leverage 10 --compound --fee-bps 5 --trend-confirm-short-exit
 ```
 
-- Use `--trend-confirm-short-exit` para reproduzir a regra do app. A transição short→long exige tendência long na última barra de 1h fechada, além de fechamento real de 15 min acima da abertura e da banda superior. Sem opções, o simulador reproduz a referência original. `--confirmation-bars 2` e `--require-market-close` são comparações independentes.
+Para reproduzir a referência original, retire `--trend-confirm-short-exit`. Para reproduzir a janela de validação, use `--start 2026-08-24T03:00:00Z` em ambos.

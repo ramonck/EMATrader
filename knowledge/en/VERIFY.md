@@ -1,4 +1,5 @@
 # VERIFY · Validation and maintenance
 - Run `python -m unittest -v`. Tests cover band/gray logic, missed turns, local caching, adoption and MCP with simulated data. Builds smoke-test the packaged CLI on all five platforms.
 - When a rule changes, update the same ID in all three languages. Update README links or index entries when needed and run the suite. Obtain separate authorization before live Mainnet verification and check the real position.
-- To compare strategies use local data, explicit costs and dates. Software tests do not measure profitability. Private market files, diagnostics and credentials stay out of Git.
+- Before approving a trading logic change, compare production and candidate code on the same local Lighter perpetual dataset, with identical dates, costs, sizing, leverage and protections. Use the [reference scenario](BACKTEST.md) and reserve a validation window before testing. Require strictly higher reference ROI and no validation regression. Record ROI, drawdown, trade count and the reproduction command. Equal, lower or unverified ROI keeps the existing rule in production.
+- Software tests verify behavior. The README reports only the simulated ROI of the current rule on Lighter data. Private market files, diagnostics and credentials stay out of Git.

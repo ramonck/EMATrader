@@ -1,4 +1,4 @@
-"""Replay the 15-minute strategy against a local Binance Spot 5-minute CSV."""
+"""Replay the 15-minute strategy against a local OHLCV CSV."""
 import argparse
 import csv
 import json
@@ -10,8 +10,6 @@ from pathlib import Path
 from engine import STEP, Candle, ema_scalping
 from broker import next_margin
 
-FIVE_MINUTES = STEP // 3
-
 
 def utc_ms(text):
     timestamp = datetime.fromisoformat(text)
@@ -20,14 +18,17 @@ def utc_ms(text):
     return int(timestamp.timestamp() * 1000)
 
 
-def candles_from_csv(path):
+def candles_from_csv(path, input_minutes=5):
+    interval = input_minutes * 60_000
+    if input_minutes not in (5, 15):
+        raise ValueError("CSV interval must be 5 or 15 minutes")
     with path.open(encoding="utf-8-sig", newline="") as file:
         previous = None
         groups = groupby(csv.DictReader(file), lambda row: int(row["open_time_ms"]) // STEP)
         for number, group in groups:
             rows = list(group)
             start = number * STEP
-            expected = [start + i * FIVE_MINUTES for i in range(3)]
+            expected = list(range(start, start + STEP, interval))
             starts = [int(row["open_time_ms"]) for row in rows]
             if starts != expected or (previous is not None and start != previous):
                 raise ValueError(f"Missing, duplicate or unordered candle near {start}")
@@ -153,6 +154,7 @@ def replay(candles, start, end, fee, margin_usd=None, leverage=1, compound=False
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("csv", type=Path)
+    parser.add_argument("--input-minutes", type=int, choices=(5, 15), default=5, help="interval in the OHLCV CSV")
     parser.add_argument("--start", required=True, type=utc_ms)
     parser.add_argument("--end", required=True, type=utc_ms)
     parser.add_argument("--fee-bps", type=float, default=1, help="assumed fee per side in basis points")
@@ -169,7 +171,7 @@ def main():
     parser.add_argument("--trend-confirm-short-exit", action="store_true",
                         help="on short-to-long turns, require hourly long bias and a bullish raw close above the 15m band")
     args = parser.parse_args()
-    with_candles = list(candles_from_csv(args.csv))
+    with_candles = list(candles_from_csv(args.csv, args.input_minutes))
     result = replay(with_candles, args.start, args.end, args.fee_bps / 10000,
                     args.margin_usd, args.leverage, args.compound, args.stop_loss / 100, args.max_account_drawdown / 100,
                     confirmation_bars=args.confirmation_bars, require_market_close=args.require_market_close,

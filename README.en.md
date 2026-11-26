@@ -2,7 +2,7 @@
 
 <p align="center"><a href="README.md">Português</a> · <a href="README.en.md">English</a> · <a href="README.es.md">Español</a></p>
 
-Monitor and optionally trade Lighter perpetuals using a 15-minute Heikin Ashi EMA band.
+Monitor perpetuals with a 15-minute Heikin Ashi EMA band. EMA Trader sources market data and executes orders exclusively through Lighter.
 
 **Educational use.** This project provides no financial advice or recommendations about assets, platforms, or trades. When using real funds, continuously monitor the bot, orders, and positions. If something goes wrong, disable automation if possible and manage or close the position in the [official Lighter interface](https://app.lighter.xyz/). [Use and risk notice](DISCLAIMER.md#english)
 
@@ -17,6 +17,7 @@ Elon Musk argues that advances in AI and robotics could make money irrelevant.
 EMA Trader applies automation to market monitoring and strategy execution with explicit rules.
 
 - **[Download](https://github.com/ramonck/EMATrader/releases/latest)** — Releases include desktop and CLI packages for Windows and macOS, and CLI packages for Linux.
+- **[Project website](https://ramonck.github.io/EMATrader/?lang=en)** — Overview, animated chart demo and Lighter backtest.
 - **[Get started](knowledge/en/ORDERS.md)** — In the desktop app, use **Settings → Language and MCP**. The CLI accepts `--lang pt|en|es`. Enabling automation automatically adopts the selected asset's existing position.
 - **[Connect via MCP](knowledge/en/MCP.md)** — Local MCP lets you inspect the running instance, including positions, P&L, signals and rules.
 - **[Knowledge base](knowledge/en/index.md)** — The index points to short topics a new chat can read independently of prior conversation.
@@ -79,20 +80,11 @@ python app.py --lang en --subaccounts
 python -m unittest -v
 ```
 
-## BTC backtest · six months
+## Lighter BTC perpetual backtest · six months
 
-This historical simulation uses Binance Spot data. The running monitor uses Lighter candles, including for BTC.
+**Simulated ROI of +454.91%**, with 163 closed trades and an 82.04% maximum drawdown at 15-minute closes. The backtest uses only Lighter Mainnet BTC perpetual candles, from 2026-05-24 to 2026-11-24 at 03:00 UTC, with the v0.1.14 production rule.
 
-BTC/USDT on Binance Spot, 2026-05-24 to 2026-11-24 at 03:00 UTC. 15-minute EMA band with **$100 starting equity and base margin**. After a win, the next margin includes the realized profit. After a loss, the target resets to $100. Each entry is capped at available equity, with no top-ups.
-
-| Cost per side | Leverage | Ending equity | Account ROI | Max drawdown | Closed trades |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 0.01% | 1× | $127.00 | +27.00% | 17.88% | 320 |
-| 0.01% | 10× | $77.63 | −22.37% | 25.19% | 6 |
-| 0.05% | 1× | $82.82 | −17.18% | 25.05% | 284 |
-| 0.05% | 10× | $77.19 | −22.81% | 25.05% | 4 |
-
-The simulation uses a 25% drawdown trigger from peak equity. When a 15-minute close reaches it, the next bar opens with a position exit and trading halts. Drawdown can exceed the trigger before the exit. See [assumptions and commands](knowledge/en/BACKTEST.md) for unprotected and per-trade stop results.
+The simulation uses $100 initial equity and base margin, 10× leverage, reinvestment and a fixed assumed cost of 0.05% per side. The account loss limit is disabled in this scenario. Execution uses candle opening prices. Funding, slippage and liquidation are outside the model. [Assumptions and reproduction](knowledge/en/BACKTEST.md)
 
 ## Connect to local MCP
 

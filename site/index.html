@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07101b">
+  <meta name="description" content="EMA Trader monitora perpétuos, interpreta tendências e pode executar ordens exclusivamente na Lighter.">
+  <title>EMA Trader · Perpétuos na Lighter</title>
+  <link rel="canonical" href="https://ramonck.github.io/EMATrader/">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script defer src="site.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main" data-i="skip">Ir para o conteúdo</a>
+  <header class="nav shell">
+    <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="36" height="36">EMA<span>Trader</span></a>
+    <nav class="section-nav" aria-label="Seções" data-aria="navLabel">
+      <a href="#strategy" data-i="navStrategy">Estratégia</a>
+      <a href="#results" data-i="navResults">Backtest</a>
+      <a href="https://github.com/ramonck/EMATrader" data-i="navCode">Código</a>
+    </nav>
+    <div class="languages" role="group" aria-label="Idioma" data-aria="languageLabel">
+      <button type="button" lang="pt" aria-label="Português" data-language="pt" aria-pressed="true">PT</button>
+      <button type="button" lang="en" aria-label="English" data-language="en" aria-pressed="false">EN</button>
+      <button type="button" lang="es" aria-label="Español" data-language="es" aria-pressed="false">ES</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero shell" aria-labelledby="title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="beacon" aria-hidden="true"></span><span data-i="eyebrow">CÓDIGO ABERTO · LIGHTER</span></p>
+        <h1 id="title"><span data-i="heroFirst">Leia a tendência.</span> <em data-i="heroSecond">Opere na Lighter.</em></h1>
+        <p class="intro" data-i="intro">Monitore contratos perpétuos com a faixa EMA de 15 minutos. Acompanhe os sinais ou habilite ordens automáticas na sua conta Lighter.</p>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/ramonck/EMATrader/releases/latest" data-i="download">Baixar EMA Trader</a>
+          <a class="button secondary" href="#strategy" data-i="learn">Entender a estratégia</a>
+        </div>
+        <p class="platforms" data-i="platforms">Windows e macOS com interface gráfica · Linux via terminal</p>
+      </div>
+
+      <figure class="terminal" aria-labelledby="chart-caption">
+        <div class="terminal-head">
+          <div class="instrument"><img src="assets/logo.svg" alt="" width="31" height="31"><div><strong>BTC-PERP</strong><small data-i="chartTime">Velas de 15 min</small></div></div>
+          <button type="button" id="motion" class="button motion" disabled data-i="pause">Pausar animação</button>
+        </div>
+        <div class="plot"><canvas id="chart" role="img" aria-label="Candles ilustrativos com uma faixa EMA" data-aria="chartLabel"></canvas></div>
+        <figcaption id="chart-caption">
+          <span><span class="legend-key" aria-hidden="true"></span><span data-i="chartBand">Faixa EMA</span></span>
+          <span data-i="chartCaption">Dados ilustrativos</span>
+        </figcaption>
+      </figure>
+    </section>
+
+    <section class="strategy shell" id="strategy" aria-labelledby="strategy-title">
+      <div class="section-title"><p class="eyebrow" data-i="signalLabel">ESTRATÉGIA</p><h2 id="strategy-title" data-i="strategyHeading">Como o robô decide</h2></div>
+      <div class="rule-grid">
+        <article class="rule"><span class="rule-mark" aria-hidden="true">15m</span><h3 data-i="ruleA">Identifica a direção</h3><p data-i="ruleAText">Calcula a faixa EMA de máximas e mínimas Heikin Ashi. A faixa neutra preserva a direção anterior.</p></article>
+        <article class="rule"><span class="rule-mark" aria-hidden="true">1h</span><h3 data-i="ruleB">Confirma a saída do short</h3><p data-i="ruleBText">A virada para long exige tendência de alta na última hora fechada e fechamento real de 15 min acima da abertura e da faixa superior.</p></article>
+        <article class="rule"><span class="rule-mark" aria-hidden="true">EMA</span><h3 data-i="ruleC">Executa pela Lighter</h3><p data-i="ruleCText">A virada de long para short segue a faixa de 15 min. Na automação, o robô confirma o fechamento da posição antes de abrir a direção inversa.</p></article>
+      </div>
+    </section>
+
+    <section class="results shell" id="results" aria-labelledby="results-title">
+      <div class="result-panel">
+        <div class="result-copy">
+          <p class="eyebrow" data-i="resultLabel">BACKTEST · LIGHTER MAINNET</p>
+          <h2 id="results-title" data-i="resultHeading">Seis meses de BTC perpétuo</h2>
+          <p data-i="resultText">De 24 de maio a 24 de novembro de 2026. Saldo inicial de US$ 100, 10× de alavancagem, reinvestimento e custo simulado de 0,05% por lado. A trava de perda da conta ficou desativada.</p>
+          <a class="text-link" href="https://github.com/ramonck/EMATrader/blob/main/knowledge/pt/BACKTEST.md" data-doc="BACKTEST" data-i="method">Ver premissas e reprodução</a>
+        </div>
+        <dl class="metrics">
+          <div class="roi"><dt data-i="roi">ROI simulado</dt><dd data-i="roiNumber">+454,91%</dd></div>
+          <div><dt data-i="drawdown">Queda máxima</dt><dd data-i="drawdownNumber">82,04%</dd></div>
+          <div><dt data-i="trades">Operações fechadas</dt><dd>163</dd></div>
+        </dl>
+        <p class="model-note" data-i="modelNote">A simulação usa somente dados da Lighter e preços de abertura de candle. Funding, slippage e liquidação ficam fora do modelo.</p>
+      </div>
+    </section>
+
+    <section class="start shell" aria-labelledby="start-title">
+      <div><h2 id="start-title" data-i="startHeading">Da tela à execução</h2><p data-i="startText">Veja como instalar o app, configurar a Lighter e consultar as regras do robô.</p></div>
+      <a class="button secondary" href="https://github.com/ramonck/EMATrader/blob/main/knowledge/pt/index.md" data-doc="index" data-i="docs">Abrir documentação</a>
+    </section>
+  </main>
+
+  <footer class="footer shell">
+    <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="30" height="30">EMA<span>Trader</span></a>
+    <span data-i="footer">Projeto de código aberto para uso educacional.</span>
+    <a href="https://github.com/ramonck/EMATrader/blob/main/DISCLAIMER.md" data-i="risk">Aviso de riscos</a>
+    <a href="https://github.com/ramonck/EMATrader">GitHub</a>
+  </footer>
+</body>
+</html>

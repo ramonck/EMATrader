@@ -1,4 +1,5 @@
 # RELEASE · GitHub Actions e publicação
+- O [site público](https://ramonck.github.io/EMATrader/) fica em `site/`. Alterações em `main` acionam `.github/workflows/pages.yml` e o GitHub Pages publica HTML, CSS, JavaScript e a marca. A apresentação em PT, EN e ES e o backtest devem acompanhar os READMEs e o tópico [BACKTEST](BACKTEST.md). A publicação do site usa seu próprio workflow.
 - Em **Actions → Compilar EMA Trader → Run workflow**, selecione o branch desejado. `publish_release` vem ativado. O GitHub cria a tag `v0.1.<número da execução>`, notas e Release com todos os pacotes. Um rerun da mesma execução atualiza os anexos.
 - Matriz: Windows x64 GUI/CLI (ZIP), macOS Apple Silicon e Intel GUI/CLI (TAR.GZ), Linux x64 e ARM64 apenas CLI (TAR.GZ). Os pacotes macOS não são notarizados.
 - O workflow testa antes de empacotar. Só publica com os cinco pacotes presentes. Desmarque a publicação para Artifacts com 14 dias de retenção. O job de publicação valida os cinco pacotes, cria as atestações de procedência e publica o arquivo SHA256SUMS. As Actions estão fixadas por SHA.

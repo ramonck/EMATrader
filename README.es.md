@@ -2,7 +2,7 @@
 
 <p align="center"><a href="README.md">Português</a> · <a href="README.en.md">English</a> · <a href="README.es.md">Español</a></p>
 
-Monitor y ejecución opcional de perpetuos en Lighter con una banda EMA Heikin Ashi de 15 minutos.
+Monitor de perpetuos con banda EMA Heikin Ashi de 15 minutos. EMA Trader obtiene los datos de mercado y ejecuta las órdenes exclusivamente en Lighter.
 
 **Uso educativo.** Este proyecto no brinda asesoramiento financiero ni recomienda activos, plataformas u operaciones. Si usas dinero real, supervisa continuamente el robot, las órdenes y las posiciones. Si algo falla, desactiva la automatización si es posible y gestiona o cierra la posición en la [interfaz oficial de Lighter](https://app.lighter.xyz/). [Aviso de uso y riesgos](DISCLAIMER.md#español)
 
@@ -17,6 +17,7 @@ Elon Musk cree que la IA y la robótica pueden hacer que el dinero pierda su rel
 EMA Trader aplica la automatización al seguimiento del mercado y a la ejecución de estrategias con reglas explícitas.
 
 - **[Descargar](https://github.com/ramonck/EMATrader/releases/latest)** — Las versiones incluyen ventana y terminal para Windows y macOS, y terminal para Linux.
+- **[Sitio del proyecto](https://ramonck.github.io/EMATrader/?lang=es)** — Presentación, demostración animada del gráfico y backtest de Lighter.
 - **[Empezar](knowledge/es/ORDERS.md)** — En la ventana usa **Configuración → Idioma y MCP**. La terminal acepta `--lang pt|en|es`. Al activar la automatización, la aplicación asume la posición existente del activo seleccionado.
 - **[Conectar por MCP](knowledge/es/MCP.md)** — MCP local permite consultar la instancia en marcha, incluidas posiciones, P&L, señales y reglas.
 - **[Base de conocimiento](knowledge/es/index.md)** — El índice enlaza temas breves que un chat nuevo puede consultar sin depender de la conversación anterior.
@@ -79,20 +80,11 @@ python app.py --lang es --subaccounts
 python -m unittest -v
 ```
 
-## Backtest de BTC · seis meses
+## Backtest de BTC perpetuo en Lighter · seis meses
 
-Esta simulación histórica usa datos de Binance Spot. El monitor en ejecución usa velas de Lighter, incluido BTC.
+**ROI simulado de +454,91%**, con 163 operaciones cerradas y una caída máxima del 82,04% en los cierres de 15 min. El backtest usa exclusivamente velas de BTC perpetuo de Lighter Mainnet, del 24/05/2026 al 24/11/2026 a las 03:00 UTC, con la regla de producción de la v0.1.14.
 
-BTC/USDT en Binance Spot, del 24/05/2026 al 24/11/2026 a las 03:00 UTC. Banda EMA de 15 minutos con **US$ 100 de saldo inicial y margen base**. Tras una ganancia, el siguiente margen incorpora el beneficio realizado. Tras una pérdida, el objetivo vuelve a US$ 100. Cada entrada se limita al saldo disponible, sin aportes.
-
-| Coste por lado | Apalancamiento | Saldo final | ROI de la cuenta | Caída máxima | Operaciones cerradas |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 0,01% | 1× | US$ 127,00 | +27,00% | 17,88% | 320 |
-| 0,01% | 10× | US$ 77,63 | −22,37% | 25,19% | 6 |
-| 0,05% | 1× | US$ 82,82 | −17,18% | 25,05% | 284 |
-| 0,05% | 10× | US$ 77,19 | −22,81% | 25,05% | 4 |
-
-La simulación usa un límite del 25% desde el máximo del saldo. Si se alcanza al cierre de 15 minutos, cierra en la siguiente apertura y bloquea nuevas entradas. La caída puede superar el límite antes de la salida. Consulta [supuestos y comandos](knowledge/es/BACKTEST.md) para ver las variantes sin protección y con stop individual.
+La simulación usa US$ 100 de saldo inicial y margen base, apalancamiento de 10×, reinversión y un coste fijo simulado del 0,05% por lado. El límite de pérdida de la cuenta está desactivado en este escenario. La ejecución usa precios de apertura de velas. El funding, el deslizamiento y la liquidación quedan fuera del modelo. [Supuestos y reproducción](knowledge/es/BACKTEST.md)
 
 ## Conectar a MCP local
 
