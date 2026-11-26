@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 300" role="img" aria-labelledby="title desc">
+  <title id="title">EMA Trader</title>
+  <desc id="desc">Identidade visual do EMA Trader em verde menta sobre fundo azul escuro</desc>
+  <defs>
+    <linearGradient id="back" x2="1" y2="1">
+      <stop stop-color="#101723"/>
+      <stop offset="1" stop-color="#172d37"/>
+    </linearGradient>
+    <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <path d="M36 0H0V36" stroke="#87acbb" stroke-opacity=".13" fill="none"/>
+    </pattern>
+  </defs>
+  <rect width="1120" height="300" rx="28" fill="url(#back)"/>
+  <rect x="640" width="480" height="300" rx="28" fill="url(#grid)"/>
+  <path d="M630 239 720 195 781 210 861 139 926 150 1036 72 1120 72V300H630Z" fill="#52e3b2" opacity=".09"/>
+  <path d="M630 239 720 195 781 210 861 139 926 150 1036 72 1114 72" fill="none" stroke="#52e3b2" stroke-width="3" opacity=".55"/>
+  <g transform="translate(61 56) scale(.68)">
+    <rect x="8" y="8" width="240" height="240" rx="55" fill="#101723" stroke="#38635d" stroke-width="3"/>
+    <path d="M50 155 87 123 121 137 170 82 207 82M50 186 87 155 122 168 170 114 207 114"
+          fill="none" stroke="#52e3b2" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M184 60H218V94" fill="none" stroke="#f1f6ff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="50" cy="155" r="8" fill="#f1f6ff"/>
+  </g>
+  <text x="266" y="151" fill="#f1f6ff" font-size="70" font-weight="700"
+        font-family="Segoe UI, Helvetica, Arial, sans-serif">EMA Trader</text>
+  <text x="271" y="198" fill="#a8c8d5" font-size="25"
+        font-family="Segoe UI, Helvetica, Arial, sans-serif">Faixa EMA de 15 min · Monitor e execução Lighter</text>
+</svg>

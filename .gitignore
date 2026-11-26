@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.exe
+*.app/
+build/
+dist/
+*.spec
+assets/icon.png
+*.csv
+*.jsonl
+*.json
+.env*
+*.pem
+*.key

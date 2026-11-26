@@ -1,0 +1,272 @@
+"""Market data and the shared 15-minute EMA strategy."""
+
+import asyncio
+import json
+import re
+import time
+from dataclasses import asdict, dataclass
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+
+import broker
+from storage import account_lock, data_root, read, write
+
+STEP = 900_000
+RETRY = 120
+NORMAL_REFRESH = 300
+BINANCE = "https://data-api.binance.vision/api/v3/"
+
+
+def get(url, query=None, payload=None, token=None):
+    headers = {"User-Agent": "EMA-Trader/1.0"}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+    request = Request(url + ("?" + urlencode(query) if query else ""),
+                      data=json.dumps(payload).encode() if payload is not None else None,
+                      headers=headers)
+    max_bytes = 8 * 1024 * 1024
+    with urlopen(request, timeout=15) as response:
+        body = response.read(max_bytes + 1)
+    if len(body) > max_bytes:
+        raise ValueError("A resposta excedeu o tamanho esperado.")
+    data = json.loads(body)
+    if isinstance(data, dict) and data.get("code", 200) != 200:
+        raise ValueError(data.get("message", "A consulta foi rejeitada."))
+    return data
+
+
+def now_ms():
+    return time.time_ns() // 1_000_000
+
+
+def symbol_key(symbol):
+    if not re.fullmatch(r"[A-Z0-9_-]{1,32}", symbol):
+        raise ValueError("Símbolo inválido.")
+    return symbol
+
+
+def shared_fetch(path, loader, lifetime):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + 16
+    while True:
+        cached = read(path, {})
+        if time.time() - cached.get("at", 0) < lifetime:
+            return cached["data"]
+        lock = account_lock(path.with_suffix(".lock"))
+        try:
+            lock.__enter__()
+        except OSError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.15)
+            continue
+        try:
+            cached = read(path, {})
+            if time.time() - cached.get("at", 0) < lifetime:
+                return cached["data"]
+            data = loader()
+            write(path, {"at": time.time(), "data": data})
+            return data
+        finally:
+            lock.__exit__(None, None, None)
+
+
+def markets():
+    path = data_root() / "catalog.json"
+    cached = read(path, {})
+
+    def load():
+        try:
+            return get(broker.NETWORKS["mainnet"] + "/api/v1/orderBookDetails")["order_book_details"]
+        except (OSError, ValueError):
+            return cached.get("data", [])
+
+    items = shared_fetch(path, load, 7 * 86400 if cached.get("data") else RETRY)
+    return {row["symbol"]: row["market_id"] for row in items
+            if row["market_type"] == "perp" and row["status"] == "active"
+            and re.fullmatch(r"[A-Z0-9_-]{1,32}", row["symbol"])}
+
+
+@dataclass(frozen=True)
+class Candle:
+    time: int
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
+@dataclass(frozen=True)
+class Signal:
+    time: int
+    upper: float
+    lower: float
+    upper_change: float
+    lower_change: float
+    band: int
+    side: int
+    action: str
+
+
+def ema_scalping(candles):
+    points = []
+    bands = []
+    side = 0
+    previous_open = previous_close = None
+    upper = lower = None
+    for candle in candles:
+        close = (candle.open + candle.high + candle.low + candle.close) / 4
+        opening = (candle.open + candle.close) / 2 if previous_open is None else (previous_open + previous_close) / 2
+        previous_open, previous_close = opening, close
+        high, low = max(candle.high, opening, close), min(candle.low, opening, close)
+        upper = high if upper is None else upper + (high - upper) / 11
+        lower = low if lower is None else lower + (low - lower) / 11
+        bands.append((upper, lower))
+        if len(bands) <= 22:
+            continue
+        up, down = upper - bands[-23][0], lower - bands[-23][1]
+        band = 1 if close > upper and up > 0 and down > 0 else -1 if close < lower and up < 0 and down < 0 else 0
+        action = ""
+        if band and band != side:
+            action = ("FS / AL" if side < 0 else "AL") if band > 0 else ("FL / AS" if side > 0 else "AS")
+            side = band
+        points.append(Signal(candle.time, upper, lower, up, down, band, side, action))
+    return points
+
+
+def candles_for(symbol, interval=15):
+    symbol_key(symbol)
+    close_step = interval * 60_000
+    path = data_root() / "quotes" / f"{symbol}-{interval}.json"
+
+    def load():
+        limit = now_ms()
+        if symbol == "BTC":
+            rows = get(BINANCE + "klines", {"symbol": "BTCUSDT", "interval": f"{interval}m", "limit": 1000})
+            return [asdict(Candle(int(row[6]) + 1, *map(float, row[1:6]))) for row in rows if int(row[6]) + 1 <= limit]
+        market_id = markets().get(symbol)
+        if market_id is None:
+            raise ValueError(f"{symbol}: mercado indisponível no catálogo da Lighter.")
+        response = get(broker.NETWORKS["mainnet"] + "/api/v1/candles", {
+            "market_id": market_id, "resolution": f"{interval}m", "count_back": 500,
+            "start_timestamp": limit - 500 * close_step, "end_timestamp": limit, "set_timestamp_to_end": "false",
+        })
+        ready = {}
+        for row in response["c"]:
+            stamp = int(row["t"])
+            end = (stamp * 1000 if stamp < 100_000_000_000 else stamp) + close_step
+            prices = [float(row.get(key, 0)) for key in ("o", "h", "l", "c")]
+            if end <= limit and min(prices) > 0 and prices[1] >= max(prices[0], prices[3]) and prices[2] <= min(prices[0], prices[3]):
+                ready[end] = asdict(Candle(end, *prices, float(row.get("v", 0))))
+        return [ready[stamp] for stamp in sorted(ready)]
+
+    data = shared_fetch(path, load, 15)
+    return [Candle(**row) for row in data]
+
+
+def account_positions(network, index):
+    data = get(broker.NETWORKS[network] + "/api/v1/account",
+               {"by": "index", "value": index, "active_only": "true"})
+    account = next(row for row in data["accounts"] if int(row["index"]) == index)
+    fields = ("symbol", "position", "sign", "avg_entry_price", "unrealized_pnl")
+    return [{field: row[field] for field in fields} for row in account["positions"] if float(row["position"])]
+
+
+def protected_request(config, **changes):
+    return asyncio.run(asyncio.wait_for(broker.main({**config, **changes}), timeout=120))
+
+
+def take_signal(points, cursor):
+    """After an outage, use the latest confirmed rotation. Grey preserves its direction."""
+    return next((point for point in reversed(points) if point.time > cursor and point.action), None)
+
+
+def diagnose(symbol, model, token):
+    series = {str(i): [asdict(candle) for candle in candles_for(symbol, i)[-24:]] for i in (5, 15, 30, 60)}
+    points = ema_scalping(candles_for(symbol))
+    data = get("https://openrouter.ai/api/v1/chat/completions", payload={
+        "model": model, "max_tokens": 650,
+        "messages": [
+            {"role": "system", "content": "Analise a faixa EMA em português. Verde vira long, vermelho vira short e cinza mantém. "
+             "Use os outros períodos como contexto e informe divergências. Não invente dados nem altere o sinal do robô."},
+            {"role": "user", "content": json.dumps({"ativo": symbol, "candles": series, "faixa": [asdict(p) for p in points[-24:]]})},
+        ],
+    }, token=token)
+    return data["choices"][0]["message"]["content"]
+
+
+class Monitor:
+    def __init__(self):
+        self.managed = None
+        self.cursor = 0
+        self.account = None
+        self.position_rows = []
+        self.closed_at = 0
+        self.last_action = None
+        self.return_at = 0
+        self.trade_error = ""
+
+    def arm(self, config, expected=None):
+        result = protected_request(config, command="check", single_position=True)
+        if result.get("blocked"):
+            raise ValueError(result["blocked"])
+        if not result["ready"]:
+            if result.get("pending") or expected is None:
+                raise ValueError("Posição ou ordem a conciliar. Confirme a quantidade real para assumir.")
+            result = protected_request(config, command="adopt", expected_position=expected)
+        self.managed = config.copy()
+        self.account = config["network"], config["account"]
+        self.position_rows = result.get("positions", [])
+        self.cursor = now_ms()
+        self.trade_error = ""
+
+    def snapshot(self, selected):
+        self.last_action = None
+        errors = []
+        managed = self.managed
+        watched = {selected} | ({managed["symbol"]} if managed else set())
+        results = {}
+        for symbol in watched:
+            try:
+                candles = candles_for(symbol)
+                points = ema_scalping(candles)
+                if not points or now_ms() - points[-1].time > 2 * STEP:
+                    raise ValueError("Candles fechados desatualizados.")
+                results[symbol] = candles, points
+            except (OSError, ValueError) as error:
+                errors.append(f"{symbol}: {error}")
+        orders = []
+        if managed and managed["symbol"] in results:
+            points = results[managed["symbol"]][1]
+            signal = take_signal(points, self.cursor)
+            if signal:
+                try:
+                    result = protected_request(managed, command="rotate", candle=signal.time,
+                                               direction=signal.side, trigger="EMA 15m")
+                    self.cursor = signal.time
+                    orders = result["actions"]
+                    if result["paused"]:
+                        self.managed = None
+                        self.trade_error = result.get("reason") or "Execução pausada. Confira posição e diário."
+                except Exception as error:
+                    self.managed = None
+                    self.trade_error = str(error)
+        if self.account:
+            try:
+                self.position_rows = account_positions(*self.account)
+                self.closed_at = now_ms()
+            except (OSError, ValueError, StopIteration) as error:
+                errors.append(f"Conta: {error}")
+        if selected in results:
+            candles, points = results[selected]
+            latest = points[-1]
+            self.last_action = latest
+            path = data_root() / "history" / f"{selected}.json"
+            record = {"at": now_ms(), "close": candles[-1].close, "signal": asdict(latest)}
+            write(path, record)
+        else:
+            candles, points = [], []
+        return candles, points, orders, errors

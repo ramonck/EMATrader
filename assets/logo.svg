@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">EMA Trader</title>
+  <rect x="8" y="8" width="240" height="240" rx="55" fill="#101723"/>
+  <path d="M50 155 87 123 121 137 170 82 207 82M50 186 87 155 122 168 170 114 207 114"
+        fill="none" stroke="#52e3b2" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M184 60H218V94" fill="none" stroke="#f1f6ff" stroke-width="13"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="50" cy="155" r="8" fill="#f1f6ff"/>
+</svg>
