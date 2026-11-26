@@ -18,4 +18,5 @@ python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T
 python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --fee-bps 1
 python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --fee-bps 5
 ```
-Los filtros experimentales `--confirmation-bars 2` (dos velas consecutivas) y `--require-market-close` (cierre real fuera de la banda) están disponibles en el simulador. La aplicación usa el giro original del indicador.
+
+- Experimentos independientes: `--confirmation-bars 2`, `--require-market-close` y `--trend-confirm-short-exit`. El último solo permite short→long si la última vela cerrada de 1 h tiene tendencia long y la de 15 minutos cierra por encima de su apertura y de la banda superior. La aplicación usa el giro original del indicador.

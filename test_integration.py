@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 
 import broker
 from app import credentials
-from backtest import replay
+from backtest import replay, short_exit_trend_signals
 from engine import STEP, Candle, Monitor, Signal
 from i18n import tr
 from knowledge import LANGUAGES, TOPICS, knowledge_rule
@@ -343,6 +343,18 @@ class VaultTests(unittest.TestCase):
 
 
 class BacktestTests(unittest.TestCase):
+    def test_short_exit_uses_only_closed_hour_and_requires_a_real_breakout(self):
+        candles = [Candle(i * STEP, 100, 104, 98, 103 if i != 8 else 100, 10) for i in range(1, 9)]
+        points = [Signal(i * STEP, 102, 99, 1, 1, band, band, "")
+                  for i, band in ((4, -1), (7, 1), (8, 1))]
+        hourly = [Signal(i * STEP, 102, 99, 1, 1, band, band, "") for i, band in ((4, -1), (8, 1))]
+        with patch("backtest.ema_scalping", side_effect=(hourly, points)):
+            self.assertEqual([p.action for p in short_exit_trend_signals(candles)], ["AS"])
+        candles[-1] = Candle(8 * STEP, 100, 104, 98, 103, 10)
+        with patch("backtest.ema_scalping", side_effect=(hourly, points)):
+            self.assertEqual([(p.time, p.action) for p in short_exit_trend_signals(candles)],
+                             [(4 * STEP, "AS"), (8 * STEP, "FS / AL")])
+
     def test_fixed_margin_tracks_closed_and_open_pnl_separately(self):
         start = 24 * STEP
         candles = [Candle(i * STEP, 100, 100, 100, 100, 10) for i in range(1, 25)]

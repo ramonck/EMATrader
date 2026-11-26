@@ -3,6 +3,7 @@ import argparse
 import csv
 import json
 import math
+from dataclasses import replace
 from datetime import datetime
 from itertools import groupby
 from pathlib import Path
@@ -38,8 +39,33 @@ def candles_from_csv(path):
             previous = end
 
 
+def short_exit_trend_signals(candles):
+    """Test an hourly trend veto and a raw-price breakout for short-to-long reversals."""
+    hour = 4 * STEP
+    hourly = []
+    for slot, group in groupby(candles, lambda candle: (candle.time - 1) // hour):
+        rows = list(group)
+        close_time = (slot + 1) * hour
+        if [row.time for row in rows] == list(range(close_time - 3 * STEP, close_time + STEP, STEP)):
+            hourly.append(Candle(close_time, rows[0].open, max(row.high for row in rows),
+                                 min(row.low for row in rows), rows[-1].close, sum(row.volume for row in rows)))
+    hour_side = {point.time: point.side for point in ema_scalping(hourly)}
+    by_close = {candle.time: candle for candle in candles}
+    side = 0
+    for point in ema_scalping(candles):
+        if not point.band or point.band == side:
+            continue
+        if side < 0 and point.band > 0:
+            candle = by_close[point.time]
+            if hour_side.get(point.time // hour * hour) != 1 or candle.close <= max(point.upper, candle.open):
+                continue
+        action = ("FS / AL" if side < 0 else "AL") if point.band > 0 else ("FL / AS" if side > 0 else "AS")
+        side = point.band
+        yield replace(point, side=side, action=action)
+
+
 def replay(candles, start, end, fee, margin_usd=None, leverage=1, compound=False, stop_loss=0, max_account_drawdown=0,
-           confirmation_bars=1, require_market_close=False):
+           confirmation_bars=1, require_market_close=False, trend_confirm_short_exit=False):
     if start >= end or start % STEP or end % STEP or not 0 <= fee < 1:
         raise ValueError("Provide aligned start/end times and a valid fee")
     if not candles or candles[0].time > start - 22 * STEP or candles[-1].time < end:
@@ -54,7 +80,11 @@ def replay(candles, start, end, fee, margin_usd=None, leverage=1, compound=False
         raise ValueError("Stop loss must be between 0% and 100% of margin")
     if not 0 <= max_account_drawdown < 1:
         raise ValueError("Account drawdown must be between 0% and 100%")
-    signals = {point.time: point for point in ema_scalping(candles, confirmation_bars, require_market_close) if point.action}
+    if trend_confirm_short_exit and (confirmation_bars != 1 or require_market_close):
+        raise ValueError("Run the short-exit trend filter separately from other experiments")
+    points = (short_exit_trend_signals(candles) if trend_confirm_short_exit else
+              ema_scalping(candles, confirmation_bars, require_market_close))
+    signals = {point.time: point for point in points if point.action}
     starting_value = margin_usd if margin_usd is not None else 1.0
     equity = high_water = starting_value
     order_margin = target_margin = starting_value
@@ -162,11 +192,14 @@ def main():
                         help="consecutive same-color closed EMA bars before a reversal")
     parser.add_argument("--require-market-close", action="store_true",
                         help="require the raw OHLC close outside the EMA band in the same direction")
+    parser.add_argument("--trend-confirm-short-exit", action="store_true",
+                        help="on short-to-long turns, require hourly long bias and a bullish raw close above the 15m band")
     args = parser.parse_args()
     with_candles = list(candles_from_csv(args.csv))
     result = replay(with_candles, args.start, args.end, args.fee_bps / 10000,
                     args.margin_usd, args.leverage, args.compound, args.stop_loss / 100, args.max_account_drawdown / 100,
-                    confirmation_bars=args.confirmation_bars, require_market_close=args.require_market_close)
+                    confirmation_bars=args.confirmation_bars, require_market_close=args.require_market_close,
+                    trend_confirm_short_exit=args.trend_confirm_short_exit)
     print(json.dumps(result, indent=2))
 
 
