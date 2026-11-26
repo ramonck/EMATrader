@@ -7,4 +7,5 @@
 - O limite de queda da conta fica em Configurações → Ordens, com padrão de 25%. A cada atualização, mede o valor total informado pela Lighter contra o pico persistido por rede e conta. Ao atingir o limite, tenta fechar somente a posição gerenciada com reduce-only e pausa novas entradas. Depois de zerar, uma nova ativação explícita inicia outro pico. Saltos de preço, falta de liquidez e intervalos de atualização podem levar a perdas acima do limite.
 - Trocar o gráfico mantém o mercado armado. Havendo posição nele, a janela volta para esse mercado após a janela de navegação de cinco minutos, na próxima atualização. Alerta sonoro opcional por ação confirmada.
 - Código `Monitor.arm`, `broker.execute`, `broker.connect`. [RECONNECT](RECONNECT.md) · [DATA](DATA.md)
+- Se a Lighter confirmar que cancelou uma abertura por desvio de preço com quantidade executada igual a zero, o app consulta novamente a posição e o livro e faz uma única nova tentativa no mesmo sinal. Em caso de execução parcial, resultado incerto ou novo cancelamento, pausa e mostra o motivo.
 - Remova `--adopt-size` de comandos antigos. A leitura da posição para adoção é automática.

@@ -19,6 +19,42 @@ from vault import ORDERS, PREFIX, Vault, VaultError
 
 
 class AdoptionTests(unittest.TestCase):
+    def test_price_cancel_requotes_once_without_doubling_a_partial_fill(self):
+        request = {"network": "testnet", "key": "test", "command": "rotate", "candle": 4, "direction": -1}
+        client = Row(check_client=lambda: None, close=AsyncMock())
+        sdk = Row(SignerClient=lambda *_: client)
+        path = Path("unused.json")
+        canceled = {"action": "Abrir short", "position": "0", "filled": "0", "partial": True,
+                    "status": broker.PRICE_CANCEL}
+        filled = dict(canceled, position="-1", filled="1", partial=False, status="filled")
+        partial = dict(canceled, position="-0.1", filled="0.1")
+        for receipts, paused in (((canceled, filled), False), ((canceled, canceled), True), ((partial,), True),
+                                 ((dict(canceled, status="canceled-invalid-balance"),), True)):
+            with self.subTest(receipts=receipts), patch("broker.execute", AsyncMock(side_effect=receipts)) as execute:
+                result = asyncio.run(broker.connect(sdk, request, 1, 3, path))
+                self.assertEqual(execute.await_count, len(receipts))
+                self.assertEqual(result["actions"], list(receipts))
+                self.assertEqual(result["paused"], paused)
+                if len(receipts) == 2:
+                    self.assertEqual(execute.await_args.args[2], dict(request, only_open=True))
+                    self.assertTrue(execute.await_args.kwargs["continue_rotation"])
+                if paused:
+                    self.assertIn("Lighter", result["reason"])
+
+    def test_price_cancel_after_confirmed_close_requotes_the_new_entry(self):
+        request = {"network": "testnet", "key": "test", "command": "rotate", "candle": 4, "direction": -1}
+        client = Row(check_client=lambda: None, close=AsyncMock())
+        sdk = Row(SignerClient=lambda *_: client)
+        close = {"action": "Fechar long", "position": "0"}
+        canceled = {"action": "Abrir short", "position": "0", "filled": "0", "partial": True,
+                    "status": broker.PRICE_CANCEL}
+        filled = dict(canceled, position="-1", filled="1", partial=False, status="filled")
+        with patch("broker.execute", AsyncMock(side_effect=(close, canceled, filled))) as execute:
+            result = asyncio.run(broker.connect(sdk, request, 1, 3, Path("unused.json")))
+        self.assertEqual(result["actions"], [close, canceled, filled])
+        self.assertEqual(execute.await_count, 3)
+        self.assertFalse(result["paused"])
+
     def test_drawdown_halt_persists_and_close_does_not_reverse(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

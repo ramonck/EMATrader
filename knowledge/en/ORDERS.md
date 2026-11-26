@@ -7,4 +7,5 @@
 - Configure the account drawdown trigger in Settings → Orders. It defaults to 25%. Each refresh compares Lighter's reported total account value with a stored peak scoped by network and account. On breach, it attempts to close only the managed position using reduce-only and pauses new entries. Once flat, explicit reactivation starts a new peak. Price gaps, liquidity and polling intervals can lead to losses beyond the trigger.
 - Switching charts preserves the armed market. With a position there, the window returns on the next refresh after a five-minute browsing window. An optional beep marks a confirmed action.
 - Code `Monitor.arm`, `broker.execute`, `broker.connect`. [RECONNECT](RECONNECT.md) · [DATA](DATA.md)
+- If Lighter confirms that an entry was canceled for slippage with zero filled quantity, the app rechecks the position and order book and makes one retry on the same signal. A partial fill, uncertain outcome or another cancellation pauses automation and shows the reason.
 - Remove `--adopt-size` from older commands. The app now reads the position automatically for adoption.

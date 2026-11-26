@@ -24,6 +24,29 @@ def next_margin(base, used, pnl):
 
 
 RISK_HALT = "Limite de perda da conta atingido. Automação pausada."
+PRICE_CANCEL = "canceled-too-much-slippage"
+CLOSE_PENDING = "A posição ainda não zerou. A abertura inversa ficou bloqueada."
+
+
+def retryable_entry(result):
+    return (result.get("action") in ("Abrir long", "Abrir short")
+            and result.get("status") == PRICE_CANCEL
+            and Decimal(result["filled"]) == 0 and Decimal(result["position"]) == 0)
+
+
+def entry_pause_reason(result):
+    if result.get("risk_halt"):
+        return RISK_HALT
+    if result.get("entry_skipped"):
+        return "A entrada foi bloqueada antes do envio à Lighter."
+    if not result.get("partial"):
+        return None
+    filled, status = result["filled"], result["status"]
+    if status == PRICE_CANCEL and Decimal(filled) == 0:
+        return "A Lighter cancelou a abertura por desvio de preço. Quantidade executada: 0."
+    if Decimal(filled) == 0:
+        return f"A abertura terminou sem execução na Lighter. Status: {status}."
+    return f"A abertura foi executada parcialmente na Lighter. Quantidade: {filled}. Status: {status}."
 
 
 def account_risk(state_path, request, snapshot, rearm=False):
@@ -349,6 +372,24 @@ async def main(request):
 
 async def connect(sdk, request, account, key_index, path):
     client = sdk.SignerClient(NETWORKS[request["network"]], account, {key_index: request["key"]})
+
+    async def finish_entry(result, actions):
+        if result.get("action"):
+            actions.append(result)
+        if request["command"] == "rotate" and retryable_entry(result):
+            try:
+                retry = await execute(sdk, client, dict(request, only_open=True), account, key_index,
+                                      path, continue_rotation=True)
+            except Exception as error:
+                return {"actions": actions, "position": None, "paused": True,
+                        "reason": str(error) if isinstance(error, BridgeError) else type(error).__name__}
+            if retry.get("action"):
+                actions.append(retry)
+            if retry.get("action") or retry.get("entry_skipped") or retry.get("risk_halt"):
+                result = retry
+        reason = entry_pause_reason(result)
+        return {"actions": actions, "position": result["position"], "paused": bool(reason), "reason": reason}
+
     try:
         if client.check_client():
             raise BridgeError("A chave informada não corresponde à conta ou à rede da Lighter.")
@@ -356,12 +397,10 @@ async def connect(sdk, request, account, key_index, path):
         if request["command"] not in ("rotate", "risk"):
             return result
         risk_halt = result.get("risk_halt", False)
-        actions = [result] if result.get("action") else []
         closing = result.get("action", "").startswith("Fechar")
         if not closing:
-            return {"actions": actions, "position": result["position"],
-                    "paused": bool(risk_halt or result.get("partial") or result.get("entry_skipped")),
-                    **({"reason": RISK_HALT} if risk_halt else {})}
+            return await finish_entry(result, [])
+        actions = [result]
         for _ in range(2):
             if Decimal(result["position"]) == 0:
                 break
@@ -374,7 +413,8 @@ async def connect(sdk, request, account, key_index, path):
             if result.get("action"):
                 actions.append(result)
         if Decimal(result["position"]) != 0:
-            return {"actions": actions, "position": result["position"], "paused": True, "close_pending": True}
+            return {"actions": actions, "position": result["position"], "paused": True,
+                    "close_pending": True, "reason": CLOSE_PENDING}
         if risk_halt:
             return {"actions": actions, "position": result["position"], "paused": True, "reason": RISK_HALT}
         try:
@@ -382,10 +422,7 @@ async def connect(sdk, request, account, key_index, path):
         except Exception as error:
             return {"actions": actions, "position": None, "paused": True,
                     "reason": str(error) if isinstance(error, BridgeError) else type(error).__name__}
-        if result.get("action"):
-            actions.append(result)
-        return {"actions": actions, "position": result["position"],
-                "paused": bool(result.get("partial") or result.get("entry_skipped"))}
+        return await finish_entry(result, actions)
     finally:
         await client.close()
 

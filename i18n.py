@@ -6,6 +6,21 @@ from string import Formatter
 LANGUAGES = {"pt": "Português", "en": "English", "es": "Español"}
 
 MESSAGES = {
+    "A posição ainda não zerou. A abertura inversa ficou bloqueada.": (
+        "The position is still open. The reverse entry was blocked.",
+        "La posición sigue abierta. La entrada inversa quedó bloqueada."),
+    "A entrada foi bloqueada antes do envio à Lighter.": (
+        "The entry was blocked before it was submitted to Lighter.",
+        "La entrada se bloqueó antes de enviarla a Lighter."),
+    "A Lighter cancelou a abertura por desvio de preço. Quantidade executada: 0.": (
+        "Lighter canceled the entry due to slippage. Filled quantity: 0.",
+        "Lighter canceló la apertura por deslizamiento. Cantidad ejecutada: 0."),
+    "A abertura terminou sem execução na Lighter. Status: {status}.": (
+        "The entry ended without a fill on Lighter. Status: {status}.",
+        "La apertura terminó sin ejecución en Lighter. Estado: {status}."),
+    "A abertura foi executada parcialmente na Lighter. Quantidade: {filled}. Status: {status}.": (
+        "The entry partially filled on Lighter. Quantity: {filled}. Status: {status}.",
+        "La apertura se ejecutó parcialmente en Lighter. Cantidad: {filled}. Estado: {status}."),
     "Cofre local": ("Local vault", "Bóveda local"),
     "Desbloquear cofre": ("Unlock vault", "Desbloquear bóveda"),
     "Frase secreta do cofre": ("Vault passphrase", "Frase secreta de la bóveda"),
