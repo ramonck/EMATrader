@@ -11,12 +11,27 @@ from decimal import Decimal
 from pathlib import Path
 
 import broker
+import dashboard
 from engine import Monitor, NORMAL_REFRESH, RETRY, markets, symbol_key
 from i18n import LANGUAGES, tr, translate_error
 from knowledge import knowledge_rule
 from local_mcp import LocalMCP
 from storage import data_root, read, write
 from vault import METADATA, Vault, VaultError
+
+SIGNAL_ACTIONS = {"AL": "Abrir long", "FL": "Fechar long", "AS": "Abrir short", "FS": "Fechar short"}
+
+
+def price_text(value):
+    return f"{value:,.2f}" if value >= 1 else f"{value:.5g}"
+
+
+def compact_usd(value):
+    for scale, unit in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
+        if value >= scale:
+            return f"US$ {value / scale:.1f}{unit}"
+    return f"US$ {value:,.0f}"
+
 
 def label(side, language):
     return "Long" if side > 0 else "Short" if side < 0 else tr(language, "Zerado")
@@ -123,14 +138,19 @@ def gui(profile="DEFAULT", language=None):
     private_path = root_path / "profiles" / (profile + ".json")
     root = tk.Tk()
     root.title("EMA Trader")
-    root.geometry("1024x700")
+    root.geometry("1152x648")
     root.minsize(740, 520)
+    background, panel, chart = "#0b111c", "#151e2e", "#101723"
+    foreground, muted = "#f1f5fc", "#a8b7cc"
+    long_color, short_color = "#56e3b4", "#ff899b"
+    root.configure(background=background)
     icon = Path(getattr(sys, "_MEIPASS", Path(__file__).parent)) / "assets" / "icon.png"
     if icon.is_file():
         root.iconphoto(True, tk.PhotoImage(file=icon))
     monitor = Monitor()
     mcp = LocalMCP()
     worker = ThreadPoolExecutor(max_workers=1)
+    public_worker = ThreadPoolExecutor(max_workers=2)
     prefs = read(preferences_path, {})
     requested_language = language
     language = requested_language or prefs.get("language", "pt")
@@ -188,10 +208,11 @@ def gui(profile="DEFAULT", language=None):
         monitor.account = private["network"], private["account"]
     selected = tk.StringVar(value=prefs.get("symbol", "BTC"))
     beep = tk.BooleanVar(value=prefs.get("beep", True))
-    banner = tk.StringVar(value=t("Aguardando candles fechados de 15 min"))
+    banner = tk.StringVar()
+    signal_title = tk.StringVar()
+    signal_detail = tk.StringVar()
     status = tk.StringVar()
     position = tk.StringVar(value=t("Conta não configurada"))
-    pnl = tk.StringVar(value="—")
     detail = tk.StringVar()
     refresh_timer = None
     busy = False
@@ -200,11 +221,17 @@ def gui(profile="DEFAULT", language=None):
     last_view = None
     last_network = None
     assets = ("BTC",)
+    market_view = None
+    stories = []
+    context_future = news_future = None
 
-    toolbar = ttk.Frame(root, padding=(18, 12))
+    def dashboard_label(parent, *, bg=background, fg=foreground, **options):
+        return tk.Label(parent, bg=bg, fg=fg, **options)
+
+    toolbar = tk.Frame(root, bg=background, padx=18, pady=12)
     toolbar.pack(fill="x")
-    ttk.Label(toolbar, text="EMA Trader", font=("TkDefaultFont", 18, "bold")).pack(side="left", padx=(0, 18))
-    localize(ttk.Label(toolbar), "Buscar ativo").pack(side="left")
+    dashboard_label(toolbar, text="EMA Trader", fg=long_color, font=("TkDefaultFont", 18, "bold")).pack(side="left", padx=(0, 18))
+    localize(dashboard_label(toolbar, fg=muted), "Buscar ativo").pack(side="left")
     search = tk.StringVar()
     search_field = ttk.Entry(toolbar, textvariable=search, width=9)
     search_field.pack(side="left", padx=(4, 0))
@@ -230,21 +257,54 @@ def gui(profile="DEFAULT", language=None):
     settings_button = localize(ttk.Button(toolbar, command=lambda: settings()), "Configurações")
     settings_button.pack(side="left", padx=4)
     localize(ttk.Button(toolbar, command=lambda: show_subaccounts()), "Subcontas").pack(side="right")
-    body = ttk.Frame(root, padding=(18, 0, 18, 12))
+    body = tk.Frame(root, bg=background, padx=18)
     body.pack(fill="both", expand=True)
-    card = localize(ttk.LabelFrame(body, padding=14), "Conta na Lighter")
+    market_strip = tk.Frame(body, bg=panel, padx=12, pady=6)
+    market_strip.pack(fill="x", pady=(0, 8))
+    localize(dashboard_label(market_strip, bg=panel, fg=muted, text="", font=("TkDefaultFont", 9, "bold")),
+             "Mercado · 24h").pack(side="left", padx=(0, 10))
+    tickers = [dashboard_label(market_strip, bg=panel, anchor="w") for _ in range(4)]
+    for ticker in tickers:
+        ticker.pack(side="left", fill="x", expand=True)
+    signal_panel = tk.Frame(body, bg=panel, padx=16, pady=9)
+    signal_panel.pack(fill="x", pady=(0, 12))
+    localize(dashboard_label(signal_panel, bg=panel, fg=muted, font=("TkDefaultFont", 10, "bold")),
+             "Sinal da EMA · 15 min").pack(anchor="w")
+    action_label = dashboard_label(signal_panel, bg=panel, textvariable=signal_title,
+                                   font=("TkDefaultFont", 22, "bold"), anchor="w", justify="left")
+    action_label.pack(anchor="w", fill="x", pady=(2, 1))
+    action_label.bind("<Configure>", lambda event: action_label.configure(wraplength=max(1, event.width)))
+    dashboard_label(signal_panel, bg=panel, fg=muted, textvariable=signal_detail).pack(anchor="w")
+    card = tk.Frame(body, bg=panel, padx=15, pady=12)
     card.pack(side="right", fill="y", padx=(12, 0))
-    ttk.Label(card, textvariable=position, width=29).pack(anchor="w")
-    ttk.Label(card, textvariable=pnl, font=("TkDefaultFont", 21, "bold")).pack(anchor="w", pady=9)
-    ttk.Label(card, textvariable=detail, wraplength=240, justify="left").pack(anchor="w")
-    main = ttk.Frame(body)
+    localize(dashboard_label(card, bg=panel, fg=muted, font=("TkDefaultFont", 10, "bold")),
+             "Posição real · Lighter").pack(anchor="w")
+    dashboard_label(card, bg=panel, textvariable=position, width=23, wraplength=240, anchor="w",
+                    justify="left", font=("TkDefaultFont", 12, "bold")).pack(anchor="w", pady=(8, 0))
+    dashboard_label(card, bg=panel, fg=muted, textvariable=detail, wraplength=240,
+                    justify="left").pack(anchor="w", pady=(0, 4))
+    ttk.Separator(card).pack(fill="x", pady=8)
+    localize(dashboard_label(card, bg=panel, fg=muted, font=("TkDefaultFont", 10, "bold")),
+             "Livro de ofertas e volume").pack(anchor="w")
+    book_label = dashboard_label(card, bg=panel, width=32, anchor="w", justify="left", wraplength=240)
+    book_label.pack(anchor="w", pady=(4, 0))
+    depth_bar = tk.Canvas(card, width=230, height=5, bg=chart, borderwidth=0, highlightthickness=0)
+    depth_bar.pack(anchor="w", pady=6)
+    ttk.Separator(card).pack(fill="x", pady=(3, 7))
+    localize(dashboard_label(card, bg=panel, fg=muted, font=("TkDefaultFont", 10, "bold")),
+             "Notícias de mercado").pack(anchor="w")
+    news_rows = [dashboard_label(card, bg=panel, wraplength=230, justify="left", anchor="w") for _ in range(2)]
+    for row in news_rows:
+        row.pack(anchor="w", pady=(5, 0))
+    main = tk.Frame(body, bg=background)
     main.pack(side="left", fill="both", expand=True)
-    ttk.Label(main, textvariable=banner, font=("TkDefaultFont", 15, "bold")).pack(anchor="w", pady=(3, 8))
-    canvas = tk.Canvas(main, bg="#101723", borderwidth=0, highlightthickness=0)
+    dashboard_label(main, textvariable=banner, font=("TkDefaultFont", 15, "bold")).pack(anchor="w", pady=(3, 8))
+    canvas = tk.Canvas(main, bg=chart, borderwidth=0, highlightthickness=0)
     canvas.pack(fill="both", expand=True)
-    localize(ttk.Label(main, padding=(0, 7)), "Verde: long · Vermelho: short · Cinza: mantém").pack(anchor="w")
-    localize(ttk.Label(main, padding=(0, 0, 0, 6)), "AL abre long · FL fecha long · AS abre short · FS fecha short").pack(anchor="w")
-    ttk.Label(root, textvariable=status, wraplength=900, padding=(18, 3, 18, 10)).pack(fill="x")
+    localize(dashboard_label(main, fg=muted), "AL abre long · FL fecha long · AS abre short · FS fecha short").pack(anchor="w", pady=(7, 0))
+    status_label = dashboard_label(root, fg=muted, textvariable=status, anchor="w", justify="left", padx=18, pady=8)
+    status_label.pack(fill="x")
+    status_label.bind("<Configure>", lambda event: status_label.configure(wraplength=max(1, event.width - 36)))
 
     def draw():
         canvas.delete("all")
@@ -256,28 +316,51 @@ def gui(profile="DEFAULT", language=None):
         lo = min(min(c.low, values[c.time].lower) if c.time in values else c.low for c in candles)
         hi = max(max(c.high, values[c.time].upper) if c.time in values else c.high for c in candles)
         width, height = max(1, canvas.winfo_width()), max(1, canvas.winfo_height())
-        stride = max(1, (width - 32) / len(candles))
+        if width <= 106 or height <= 70:
+            return
+        plot_right = width - 83
+        stride = (plot_right - 18) / len(candles)
 
         def y(value):
-            return 18 + (hi - value) / max(hi - lo, 1e-12) * max(1, height - 36)
+            return 27 + (hi - value) / max(hi - lo, 1e-12) * (height - 66)
+
+        for step in range(5):
+            level = hi - (hi - lo) * step / 4
+            line_y = y(level)
+            canvas.create_line(10, line_y, plot_right, line_y, fill="#202b3d")
+            canvas.create_text(plot_right + 7, line_y, text=price_text(level), anchor="w", fill=muted)
+        canvas.create_line(10, y(candles[-1].close), plot_right, y(candles[-1].close), fill="#8199b4", dash=(3, 4))
+        for i, anchor in ((0, "w"), (len(candles) // 2, "center"), (len(candles) - 1, "e")):
+            stamp = time.strftime("%H:%M", time.localtime(candles[i].time / 1000))
+            canvas.create_text(18 + (i + .5) * stride, height - 9, text=stamp, anchor=anchor, fill=muted)
 
         last = None
         for i, c in enumerate(candles):
-            x = 16 + i * stride
+            x = 18 + (i + .5) * stride
             point = values.get(c.time)
             if point and last:
                 tone = {1: "#174637", -1: "#592f3a", 0: "#333e51"}[point.band]
                 canvas.create_polygon(x-stride, y(last.upper), x, y(point.upper),
                                       x, y(point.lower), x-stride, y(last.lower), fill=tone)
             last = point
-            shade = "#52e3b2" if c.close >= c.open else "#ff7489"
+        for i, c in enumerate(candles):
+            x = 18 + (i + .5) * stride
+            point = values.get(c.time)
+            shade = long_color if c.close >= c.open else short_color
             canvas.create_line(x, y(c.high), x, y(c.low), fill=shade)
             top = min(y(c.open), y(c.close))
             canvas.create_rectangle(x-stride*.24, top, x+stride*.24, max(top+2, y(min(c.open,c.close))),
                                     fill=shade, outline="")
             if point and point.action:
-                canvas.create_text(x, y(c.low)+11 if point.side > 0 else y(c.high)-11,
-                                   text=point.action, fill="#c8f4e7" if point.side > 0 else "#ffb0ba")
+                tip = y(c.low) + 3 if point.side > 0 else y(c.high) - 3
+                base = tip + 7 * point.side
+                color = long_color if point.side > 0 else short_color
+                canvas.create_polygon(x, tip, x - 4, base, x + 4, base, fill=color)
+                marker = canvas.create_text(max(30, x), base + 9 * point.side, text=point.action, fill=color,
+                                            font=("TkDefaultFont", 8, "bold"))
+                x1, y1, x2, y2 = canvas.bbox(marker)
+                pill = canvas.create_rectangle(x1 - 3, y1 - 1, x2 + 3, y2 + 1, fill=chart, outline="")
+                canvas.tag_lower(pill, marker)
 
     def submit(task, on_finish, on_error=None):
         nonlocal busy
@@ -315,6 +398,7 @@ def gui(profile="DEFAULT", language=None):
             schedule(2)
             return
         symbol = selected.get()
+        refresh_context(symbol, monitor.market_network)
 
         def update():
             network = monitor.market_network
@@ -347,38 +431,131 @@ def gui(profile="DEFAULT", language=None):
 
         submit(update, show, lambda: schedule(RETRY))
 
+    def refresh_context(symbol, network):
+        nonlocal context_future, news_future
+
+        def finish_market():
+            nonlocal market_view, context_future
+            if not context_future.done():
+                root.after(150, finish_market)
+                return
+            try:
+                quotes, book = context_future.result()
+                if selected.get() == symbol and monitor.market_network == network:
+                    market_view = network, symbol, quotes, book
+            except (OSError, ValueError, KeyError):
+                if selected.get() == symbol and monitor.market_network == network:
+                    market_view = network, symbol, {}, None
+            finally:
+                context_future = None
+            render_context()
+            if selected.get() != symbol or monitor.market_network != network:
+                refresh_context(selected.get(), monitor.market_network)
+
+        def finish_news():
+            nonlocal stories, news_future
+            if not news_future.done():
+                root.after(150, finish_news)
+                return
+            try:
+                stories = news_future.result()
+            finally:
+                news_future = None
+            render_context()
+
+        if context_future is None:
+            context_future = public_worker.submit(dashboard.market_context, network, symbol)
+            root.after(150, finish_market)
+        if news_future is None:
+            news_future = public_worker.submit(dashboard.headlines)
+            root.after(150, finish_news)
+
+    def render_context():
+        symbol = selected.get()
+        quotes, book = {}, None
+        if market_view and market_view[0] == monitor.market_network:
+            _, market_symbol, quotes, book = market_view
+            if market_symbol != symbol:
+                book = None
+        gold = next((name for name in ("XAU", "GOLD", "XAUT", "PAXG") if name in quotes), "XAU")
+        for ticker, name in zip(tickers, ("BTC", "ETH", "SOL", gold)):
+            if name in quotes:
+                value, change, _ = quotes[name]
+                ticker.configure(text=f"{name}   {price_text(value)}   {change:+.2f}%",
+                                 fg=long_color if change >= 0 else short_color)
+            else:
+                ticker.configure(text=f"{name}   —", fg=muted)
+        volume = compact_usd(quotes[symbol][2]) if symbol in quotes else "—"
+        lines = [t("{symbol} · Volume 24h {volume}", symbol=symbol, volume=volume)]
+        depth_bar.delete("all")
+        if book and time.time() - book[3] <= 2 * NORMAL_REFRESH:
+            spread, bids, asks, observed = book
+            lines.append(t("Spread {spread} pb · {time}", spread=f"{spread:.2f}", time=time.strftime("%H:%M", time.localtime(observed))))
+            lines.append(t("Compras {bids} · Vendas {asks}", bids=compact_usd(bids), asks=compact_usd(asks)))
+            lines.append(t("Ofertas até 0,25% do preço médio"))
+            if bids + asks:
+                split = 230 * bids / (bids + asks)
+                depth_bar.create_rectangle(0, 0, split, 5, fill=long_color, width=0)
+                depth_bar.create_rectangle(split, 0, 230, 5, fill=short_color, width=0)
+        else:
+            lines.append(t("Livro indisponível"))
+        book_label.configure(text="\n".join(lines))
+        for i, row in enumerate(news_rows):
+            row.unbind("<Button-1>")
+            if i < len(stories):
+                published, title, source, link = stories[i]
+                stamp = time.strftime("%Y-%m-%d", time.localtime(published))
+                row.configure(text=f"{source} · {stamp}\n{title}", cursor="hand2", fg=foreground)
+                row.bind("<Button-1>", lambda _, url=link: webbrowser.open(url))
+            else:
+                row.configure(text=t("Sem manchetes disponíveis") if i == 0 else "", cursor="", fg=muted)
+
     def render():
         nonlocal last_chart
         symbol, candles, points, errors = last_view or (selected.get(), [], [], [])
         if points:
             last_chart = candles, points
             value = points[-1]
-            action = value.action or t("Manter {side}", side=label(value.side, language).lower())
-            banner.set(f"{symbol} · {action} · {candles[-1].close:,.2f}")
+            latest = next((point for point in reversed(points) if point.action), None)
+            current = t("Manter {side}", side=label(value.side, language).lower()) if value.side else t("Aguardando sinal")
+            if latest:
+                signal_title.set("  →  ".join(t(SIGNAL_ACTIONS[code]) for code in latest.action.split(" / ")))
+                stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(latest.time / 1000))
+                signal_detail.set(t("Último sinal {time}", time=stamp) + (f"  ·  {current}" if latest != value else ""))
+            else:
+                signal_title.set(current)
+                signal_detail.set("")
+            action_label.configure(fg={1: long_color, -1: short_color, 0: foreground}[value.side])
+            banner.set(f"{symbol} · {price_text(candles[-1].close)}")
             draw()
         else:
-            banner.set(t("Aguardando candles fechados de 15 min"))
-        if monitor.position_rows:
-            focus = monitor.managed["symbol"] if monitor.managed else symbol
-            row = next((r for r in monitor.position_rows if r["symbol"] == focus), monitor.position_rows[0])
-            position.set(row["symbol"] + " · " + label(int(row["sign"]), language))
-            pnl.set(f'US$ {float(row["unrealized_pnl"]):+,.2f}')
-            others = [f'{r["symbol"]} · {label(int(r["sign"]), language)} · US$ {float(r["unrealized_pnl"]):+,.2f}'
-                      for r in monitor.position_rows if r is not row]
-            size = t("Quantidade {quantity} · entrada {price}", quantity=row["position"], price=row["avg_entry_price"])
-            detail.set("\n".join([size] + ([t("Dados desatualizados")] if errors else []) + others))
+            banner.set(symbol)
+            signal_title.set(t("Aguardando sinal"))
+            signal_detail.set(t("Dados desatualizados" if errors else "Aguardando candles fechados de 15 min"))
+            action_label.configure(fg=foreground)
+        account_stale = any(error.startswith("Conta:") for error in errors)
+        if monitor.position_rows and not account_stale:
+            rows = monitor.position_rows
+            position.set("\n".join(f'{row["symbol"]} · {label(int(row["sign"]), language)}' for row in rows[:3]))
+            detail.set(t("Mais {count} posições", count=len(rows) - 3) if len(rows) > 3 else "")
         else:
-            position.set(t("Sem posição aberta" if monitor.account and monitor.closed_at else
+            position.set(t("Dados desatualizados" if account_stale else
+                           "Sem posição aberta" if monitor.account and monitor.closed_at else
                            "Aguardando conta" if monitor.account else "Conta não configurada"))
-            pnl.set("—")
             detail.set("")
         mode = t("Ordens automáticas ativas para {symbol}", symbol=monitor.managed["symbol"]) if monitor.managed else t("Ordens automáticas desativadas")
         if monitor.managed and monitor.managed["symbol"] != selected.get():
             mode += " · " + t("Novas ordens neste gráfico estão bloqueadas.")
-        messages = [message for message in [monitor.trade_error, *errors] if message]
+        messages = []
+        if monitor.trade_error:
+            messages.append(broker.CLOSE_UNCONFIRMED if monitor.recovery_pending else
+                            "Execução pausada. Confira posição e diário.")
+        if errors:
+            messages.append("Dados desatualizados")
         if monitor.managed and monitor.entry_retry:
             messages.insert(0, "Abertura cancelada por desvio de preço. Aguardando nova tentativa.")
         status.set(" · ".join([mode] + [translate_error(language, message) for message in messages]))
+        render_context()
 
     def schedule(seconds):
         nonlocal refresh_timer
@@ -567,10 +744,12 @@ def gui(profile="DEFAULT", language=None):
         else:
             root.destroy()
     root.protocol("WM_DELETE_WINDOW", close_window)
+    render()
     root.after(100, refresh)
     root.mainloop()
     mcp.stop()
     worker.shutdown(wait=False)
+    public_worker.shutdown(wait=False, cancel_futures=True)
 
 
 def main():

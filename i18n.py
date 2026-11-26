@@ -6,6 +6,20 @@ from string import Formatter
 LANGUAGES = {"pt": "Português", "en": "English", "es": "Español"}
 
 MESSAGES = {
+    "Mercado · 24h": ("Market · 24h", "Mercado · 24h"),
+    "Sinal da EMA · 15 min": ("EMA signal · 15 min", "Señal de EMA · 15 min"),
+    "Último sinal {time}": ("Latest signal {time}", "Última señal {time}"),
+    "Aguardando sinal": ("Waiting for a signal", "Esperando una señal"),
+    "Posição real · Lighter": ("Live position · Lighter", "Posición real · Lighter"),
+    "Mais {count} posições": ("{count} more positions", "{count} posiciones más"),
+    "Livro de ofertas e volume": ("Order book and volume", "Libro de órdenes y volumen"),
+    "{symbol} · Volume 24h {volume}": ("{symbol} · 24h volume {volume}", "{symbol} · Volumen 24h {volume}"),
+    "Spread {spread} pb · {time}": ("Spread {spread} bps · {time}", "Spread {spread} pb · {time}"),
+    "Compras {bids} · Vendas {asks}": ("Bids {bids} · Asks {asks}", "Compras {bids} · Ventas {asks}"),
+    "Ofertas até 0,25% do preço médio": ("Orders within 0.25% of midpoint", "Órdenes hasta 0,25% del punto medio"),
+    "Livro indisponível": ("Order book unavailable", "Libro de órdenes no disponible"),
+    "Notícias de mercado": ("Market news", "Noticias de mercado"),
+    "Sem manchetes disponíveis": ("No headlines available", "Sin titulares disponibles"),
     "Fechamento pendente. Aguardando confirmação da Lighter.": (
         "Pending close. Waiting for confirmation from Lighter.",
         "Cierre pendiente. Esperando confirmación de Lighter."),
