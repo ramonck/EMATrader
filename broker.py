@@ -127,16 +127,19 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
         return {"position": str(current), "market": market_id, "breakout_filter": True, "entry_room_filter": True,
                 "pending": bool(state.get("pending")), "blocked": blocked, "positions": public_positions(snapshot),
                 "ready": not state.get("pending") and Decimal(state["position"]) == current}
-    if command == "adopt":
-        expected = Decimal(str(request["expected_position"]))
+    if command == "arm":
         if state.get("pending"):
             raise BridgeError("O diário tem uma ordem pendente para este mercado. Concilie antes de assumir a posição.")
-        if not current or expected != current:
-            raise BridgeError("A posição mudou. Confira a nova quantidade antes de assumir.")
-        active = await client.order_api.account_active_orders(auth, account, market_id)
-        if active.orders or (config is not None and config.pending_order_count):
-            raise BridgeError("Há ordem ativa ou pendente neste mercado. Confira antes de assumir.")
-        save_state(state_path, dict(state, position=str(current), adopted_at=int(time.time() * 1000)))
+        if not current:
+            await ensure_account_flat(sdk, client, account, auth, state_path)
+            if Decimal(state["position"]):
+                raise BridgeError("Estado da posição divergente ou ordem pendente. Confira a conta e o diário antes de retomar.")
+        else:
+            active = await client.order_api.account_active_orders(auth, account, market_id)
+            if active.orders or config.pending_order_count:
+                raise BridgeError("Há ordem ativa ou pendente neste mercado. Confira antes de assumir.")
+            if Decimal(state["position"]) != current:
+                save_state(state_path, dict(state, position=str(current), adopted_at=int(time.time() * 1000)))
         return {"ready": True, "position": str(current), "market": market_id, "positions": public_positions(snapshot)}
     if state.get("pending") or Decimal(state["position"]) != current:
         raise BridgeError("Estado da posição divergente ou ordem pendente. Confira a conta e o diário antes de retomar.")

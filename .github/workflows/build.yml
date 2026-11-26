@@ -47,6 +47,7 @@ jobs:
       - name: Compilar terminal
         run: >
           python -m PyInstaller --noconfirm --onedir --exclude-module tkinter
+          --add-data "knowledge:knowledge"
           --name ema-trader-cli --collect-data lighter --collect-binaries lighter app.py
       - name: Gerar ícone
         if: matrix.desktop
@@ -56,6 +57,7 @@ jobs:
         run: >
           python -m PyInstaller --noconfirm --onedir --windowed
           --icon assets/icon.png --add-data "assets/icon.png:assets"
+          --add-data "knowledge:knowledge"
           --name "EMA Trader" --osx-bundle-identifier org.ematrader.app
           --collect-data lighter --collect-binaries lighter gui_entry.py
       - name: Testar executável Windows
@@ -64,6 +66,10 @@ jobs:
         run: |
           & ".\dist\ema-trader-cli\ema-trader-cli.exe" --help
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($lang in 'pt', 'en', 'es') {
+            & ".\dist\ema-trader-cli\ema-trader-cli.exe" --lang $lang --subaccounts
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           if (!(Test-Path 'dist/EMA Trader/EMA Trader.exe')) { throw 'Janela ausente' }
           Compress-Archive -Path 'dist/*' -DestinationPath "EMA-Trader-${{ matrix.target }}.zip"
       - name: Empacotar Linux e macOS
@@ -71,6 +77,9 @@ jobs:
         shell: bash
         run: |
           ./dist/ema-trader-cli/ema-trader-cli --help
+          for lang in pt en es; do
+            ./dist/ema-trader-cli/ema-trader-cli --lang "$lang" --subaccounts
+          done
           if [[ "$RUNNER_OS" == "macOS" ]]; then
             test -d "dist/EMA Trader.app"
             tar -czf "EMA-Trader-${{ matrix.target }}.tar.gz" -C dist "EMA Trader.app" ema-trader-cli

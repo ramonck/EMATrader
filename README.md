@@ -1,57 +1,53 @@
-<p align="center"><img width="920" alt="EMA Trader — Faixa EMA de 15 min" src="assets/banner.svg"></p>
+<p align="center"><img width="920" alt="EMA Trader" src="assets/banner.svg"></p>
 
-<p align="center"><a href="#compilar-pelo-github">Compilar</a> · <a href="#rodar-a-partir-do-código">Executar</a> · <a href="#btc-e-sol-em-paralelo">Subcontas</a> · <a href="#dados-e-credenciais">Privacidade</a></p>
+<p align="center"><a href="README.md">Português</a> · <a href="README.en.md">English</a> · <a href="README.es.md">Español</a></p>
 
-Monitor da faixa EMA Heikin Ashi de 15 minutos com execução opcional de perpétuos na Lighter.
+Monitor e execução opcional de perpétuos na Lighter com a faixa EMA Heikin Ashi de 15 minutos.
 
-| Faixa | Ação |
-| --- | --- |
-| 🟢 Verde | Long |
-| 🔴 Vermelha | Short |
-| ⚪ Cinza | Mantém a direção anterior |
+- **[Baixar](https://github.com/ramonck/EMATrader/releases/latest)** — A Release inclui Windows e macOS com janela e terminal, e Linux com terminal.
+- **[Começar](knowledge/pt/ORDERS.md)** — Na janela use **Configurações → Idioma e MCP** para trocar o idioma. O terminal aceita `--lang pt|en|es`. Ao habilitar a automação, o app assume automaticamente a posição existente do ativo selecionado.
+- **[Conectar por MCP](knowledge/pt/MCP.md)** — O MCP local permite consultar a instância em andamento, inclusive posição, P&L, sinal e regras.
+- **[Base de conhecimento](knowledge/pt/index.md)** — O índice aponta para tópicos curtos que um novo chat pode consultar sem depender da conversa anterior.
 
-| Plataforma | Janela | Terminal |
-| --- | --- | --- |
-| Windows x64 | Sim | Sim |
-| macOS Apple Silicon e Intel | Sim | Sim |
-| Linux x64 e ARM64 | — | Sim |
-
-## Compilar pelo GitHub
-
-Os pacotes prontos ficam em **Releases**. Para gerar uma nova versão, abra **Actions → Compilar EMA Trader → Run workflow**. Após todas as plataformas passarem, o workflow cria a tag, publica a Release e anexa os cinco pacotes. Desmarque **Publicar a Release** para gerar apenas **Artifacts** temporários. O workflow não usa credenciais de corretora. Os pacotes macOS não incluem notarização da Apple.
+Para gerar e publicar uma versão, abra **Actions → Compilar EMA Trader → Run workflow**. O próprio Action cria a tag e publica a Release com os cinco pacotes. [GitHub Actions](knowledge/pt/RELEASE.md)
 
 ## Rodar a partir do código
 
-    python -m pip install -r requirements.txt
-    python app.py --symbol BTC
-    python app.py --gui
-    python app.py --subaccounts
-    python -m unittest -v
+```sh
+python -m pip install -r requirements.txt
+python app.py --lang pt --symbol BTC
+python app.py --lang pt --gui
+python app.py --lang pt --subaccounts
+python -m unittest -v
+```
 
-O modo padrão acompanha o mercado com ordens desligadas. Um índice de conta e uma rede permitem consultar posições abertas, inclusive manuais. No terminal, use também **--account** e **--network**. No modo gráfico, use **Configurações → Só acompanhar conta**.
+## Backtest de seis meses
 
-Ordens pelo terminal exigem **--trade** e a variável de ambiente **LIGHTER_API_KEY**. Mainnet exige também **--confirm-mainnet**. Para assumir uma posição manual, informe sua quantidade exata com sinal em **--adopt-size**. Uma posição short tem quantidade negativa. A interface gráfica pede a quantidade antes da adoção.
+BTC/USDT, Binance Spot, de 24/05/2026 a 24/11/2026 às 00h de Brasília. Faixa EMA de 15 minutos, exposição de 1× e reinvestimento do saldo. As duas linhas usam os mesmos candles locais.
 
-## Monitoramento e reconexão
+| Custo por lado | ROI líquido | Queda máxima | Operações fechadas | Operações lucrativas |
+| --- | ---: | ---: | ---: | ---: |
+| 0,01% | **+26,63%** | 18,35% | 320 | 103 |
+| 0,05% | **−2,03%** | 27,51% | 320 | 96 |
 
-- O app usa candles fechados. Os sinais de BTC mantêm a fonte Binance Spot usada no backtest. Os demais ativos usam candles dos perpétuos Lighter.
-- O catálogo fica em disco e é atualizado a cada sete dias. Cotações recentes também ficam em cache, com bloqueio para que instâncias locais compartilhem o mesmo resultado.
-- Se a leitura falhar, o monitor tenta novamente em dois minutos. Após reconectar, processa a última virada direcional confirmada que perdeu enquanto estava aberto. A execução usa o preço disponível naquele momento. Resultados de ordem incertos ou posições divergentes pausam o envio.
-- A janela pode ficar minimizada. Suspensão do computador, desligamento ou término do processo suspendem o monitoramento.
-- A IA via OpenRouter usa dados de mercado e a faixa para revisão. Nenhuma posição é aberta por parecer da IA.
+O ROI inclui a posição short que ficou aberta no fim, marcada pelo último fechamento. Compare os custos antes de tirar conclusões. [Reproduzir e conferir as premissas](knowledge/pt/BACKTEST.md)
 
-## BTC e SOL em paralelo
+## Conectar o MCP local
 
-Use **Subcontas** no app ou **--subaccounts** no terminal. Configure uma subconta e uma chave próprias para cada execução. Instâncias no mesmo computador podem usar a mesma pasta de dados. O catálogo e as cotações são compartilhados, mas cada rede e conta têm seu próprio diário de ordens e trava de posição única.
+No EMA Trader, abra **Configurações → Idioma e MCP**, ative o MCP e copie o token. A porta padrão é `8765`. No terminal, defina `EMA_TRADER_MCP_TOKEN` com um token aleatório alfanumérico de pelo menos 24 caracteres antes de rodar `python app.py --mcp-port 8765`.
 
-Para abrir duas janelas com preferências separadas, execute **python app.py --gui --profile BTC** e **python app.py --gui --profile SOL** com Tk instalado, ou informe **--profile** diretamente ao executável gráfico. O executável de terminal distribuído foi compilado sem Tk. A janela padrão usa o perfil DEFAULT.
+No Codex, adicione este bloco ao seu `~/.codex/config.toml` local e reinicie o cliente. Substitua `SEU_TOKEN` pelo token copiado. Guarde o arquivo fora do repositório.
 
-Se houver uma posição aberta em outro ativo na mesma conta, o robô bloqueia a próxima entrada. Numa virada, só envia a abertura após a Lighter confirmar que a posição anterior zerou. Uma execução incerta pode exigir conciliação manual do diário.
+```toml
+[mcp_servers.ema_trader]
+url = "http://127.0.0.1:8765/mcp"
+http_headers = { Authorization = "Bearer SEU_TOKEN" }
+```
 
-## Dados e credenciais
+No Claude Code, registre a URL e o mesmo token:
 
-O app grava configurações sem segredos, catálogos, cotações e diários no diretório de dados do sistema. Para guardar tudo em uma pasta própria, defina **EMA_TRADER_DATA_DIR** como um caminho absoluto. Chaves ficam na sessão, nunca nos arquivos de dados. Para a IA, use **OPENROUTER_API_KEY** e opcionalmente **OPENROUTER_MODEL**.
+```sh
+claude mcp add --transport http ema-trader http://127.0.0.1:8765/mcp --header "Authorization: Bearer SEU_TOKEN"
+```
 
-Ao migrar de uma versão Windows anterior, o novo diário começa separado. Confira a posição real antes de assumi-la e mantenha apenas uma instância armada por conta durante a migração.
-
-[Documentação da Lighter sobre tipos de conta e subcontas](https://docs.lighter.xyz/trading/trading-fees)
+Com o app aberto, pergunte “Qual é a posição e o último sinal?” O MCP é opcional e só leitura. Para regras, peça o `knowledge_index` em `pt` e depois apenas o tópico necessário. [MCP](knowledge/pt/MCP.md)

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 300" role="img" aria-labelledby="title desc">
   <title id="title">EMA Trader</title>
-  <desc id="desc">Identidade visual do EMA Trader em verde menta sobre fundo azul escuro</desc>
+  <desc id="desc">EMA Trader · 15 min · Lighter</desc>
   <defs>
     <linearGradient id="back" x2="1" y2="1">
       <stop stop-color="#101723"/>
@@ -24,5 +24,5 @@
   <text x="266" y="151" fill="#f1f6ff" font-size="70" font-weight="700"
         font-family="Segoe UI, Helvetica, Arial, sans-serif">EMA Trader</text>
   <text x="271" y="198" fill="#a8c8d5" font-size="25"
-        font-family="Segoe UI, Helvetica, Arial, sans-serif">Faixa EMA de 15 min · Monitor e execução Lighter</text>
+        font-family="Segoe UI, Helvetica, Arial, sans-serif">15 min · EMA · Lighter</text>
 </svg>

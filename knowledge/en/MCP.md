@@ -1,0 +1,6 @@
+# MCP · Local access to the running instance
+- In the window choose **Settings → Language and MCP → Enable local MCP**, select a port and copy the token. For CLI use `--mcp-port 8765` with `EMA_TRADER_MCP_TOKEN` in the environment. Use a random alphanumeric token of at least 24 characters.
+- The embedded endpoint uses Streamable HTTP at `http://127.0.0.1:8765/mcp`. Add that URL to your client and send `Authorization: Bearer …`. For Codex set the URL and `bearer_token_env_var = "EMA_TRADER_MCP_TOKEN"` under `[mcp_servers.ema_trader]`. For Claude Code use `claude mcp add --transport http ema-trader URL --header "Authorization: Bearer …"` with your local token.
+- `status` returns positions, P&L, viewed/managed assets and UTC millisecond timestamps. `candles` returns up to 24 candles from memory. `knowledge_index` and `knowledge_rule` accept `language: pt|en|es`.
+- MCP is opt-in, read-only, authenticated and bound to loopback. It makes no exchange calls, exposes no keys and sends no orders. Disabling or exiting closes it. Responses can include private trading data received by your AI client.
+- [Codex](https://learn.chatgpt.com/docs/extend/mcp#connect-codex-to-an-mcp-server) · [Claude Code](https://code.claude.com/docs/en/mcp)

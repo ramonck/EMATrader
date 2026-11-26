@@ -17,15 +17,9 @@ NORMAL_REFRESH = 300
 BINANCE = "https://data-api.binance.vision/api/v3/"
 
 
-def get(url, query=None, payload=None, token=None):
+def get(url, query=None):
     headers = {"User-Agent": "EMA-Trader/1.0"}
-    if token:
-        headers["Authorization"] = "Bearer " + token
-    if payload is not None:
-        headers["Content-Type"] = "application/json"
-    request = Request(url + ("?" + urlencode(query) if query else ""),
-                      data=json.dumps(payload).encode() if payload is not None else None,
-                      headers=headers)
+    request = Request(url + ("?" + urlencode(query) if query else ""), headers=headers)
     max_bytes = 8 * 1024 * 1024
     with urlopen(request, timeout=15) as response:
         body = response.read(max_bytes + 1)
@@ -184,20 +178,6 @@ def take_signal(points, cursor):
     return next((point for point in reversed(points) if point.time > cursor and point.action), None)
 
 
-def diagnose(symbol, model, token):
-    series = {str(i): [asdict(candle) for candle in candles_for(symbol, i)[-24:]] for i in (5, 15, 30, 60)}
-    points = ema_scalping(candles_for(symbol))
-    data = get("https://openrouter.ai/api/v1/chat/completions", payload={
-        "model": model, "max_tokens": 650,
-        "messages": [
-            {"role": "system", "content": "Analise a faixa EMA em português. Verde vira long, vermelho vira short e cinza mantém. "
-             "Use os outros períodos como contexto e informe divergências. Não invente dados nem altere o sinal do robô."},
-            {"role": "user", "content": json.dumps({"ativo": symbol, "candles": series, "faixa": [asdict(p) for p in points[-24:]]})},
-        ],
-    }, token=token)
-    return data["choices"][0]["message"]["content"]
-
-
 class Monitor:
     def __init__(self):
         self.managed = None
@@ -208,21 +188,17 @@ class Monitor:
         self.last_action = None
         self.return_at = 0
         self.trade_error = ""
+        self.market_state = {}
 
-    def arm(self, config, expected=None):
+    def arm(self, config):
         fields = ("network", "account", "symbol")
         if self.managed and any(config[field] != self.managed[field] for field in fields):
             raise ValueError("Desative a automação atual antes de trocar de conta, rede ou ativo.")
-        result = protected_request(config, command="check", single_position=True)
-        if result.get("blocked"):
-            raise ValueError(result["blocked"])
-        if not result["ready"]:
-            if result.get("pending") or expected is None:
-                raise ValueError("Posição ou ordem a conciliar. Confirme a quantidade real para assumir.")
-            result = protected_request(config, command="adopt", expected_position=expected)
+        result = protected_request(config, command="arm")
         self.managed = config.copy()
         self.account = config["network"], config["account"]
         self.position_rows = result.get("positions", [])
+        self.closed_at = now_ms()
         self.cursor = now_ms()
         self.trade_error = ""
 
@@ -241,6 +217,9 @@ class Monitor:
                 results[symbol] = candles, points
             except (OSError, ValueError) as error:
                 errors.append(f"{symbol}: {error}")
+        self.market_state = {symbol: data for symbol, data in self.market_state.items() if symbol in watched}
+        self.market_state.update({symbol: (candles[-24:], points[-1])
+                                  for symbol, (candles, points) in results.items()})
         orders = []
         if managed and managed["symbol"] in results:
             points = results[managed["symbol"]][1]

@@ -1,0 +1,6 @@
+# MCP · Consulta local de la instancia en marcha
+- En la ventana usa **Configuración → Idioma y MCP → Activar MCP local**, elige el puerto y copia el token. En terminal usa `--mcp-port 8765` con `EMA_TRADER_MCP_TOKEN` en el entorno. Usa un token alfanumérico aleatorio de al menos 24 caracteres.
+- El servidor integrado usa Streamable HTTP en `http://127.0.0.1:8765/mcp`. Añade esa URL al cliente y envía `Authorization: Bearer …`. En Codex configura la URL y `bearer_token_env_var = "EMA_TRADER_MCP_TOKEN"` bajo `[mcp_servers.ema_trader]`. En Claude Code usa `claude mcp add --transport http ema-trader URL --header "Authorization: Bearer …"` con tu token local.
+- `status` devuelve posiciones, P&L, activos visto/gestionado y horas UTC en milisegundos. `candles` devuelve hasta 24 velas en memoria. `knowledge_index` y `knowledge_rule` aceptan `language: pt|en|es`.
+- MCP es opcional, de solo lectura, autenticado y limitado a loopback. No consulta bolsas, no expone claves ni envía órdenes. Al desactivar o salir se cierra. Tu cliente de IA puede recibir datos privados de trading en las respuestas.
+- [Codex](https://learn.chatgpt.com/docs/extend/mcp#connect-codex-to-an-mcp-server) · [Claude Code](https://code.claude.com/docs/en/mcp)
