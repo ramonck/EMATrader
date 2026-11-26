@@ -4,6 +4,16 @@
 
 Monitor e execução opcional de perpétuos na Lighter com a faixa EMA Heikin Ashi de 15 minutos.
 
+## Por que o EMA Trader?
+
+Elon Musk acredita que a IA e a robótica podem tornar o dinheiro irrelevante.
+
+> Ainda haverá limitações de energia, como a eletricidade, e de massa. Mas acho que, em algum momento, a moeda se torna irrelevante.
+>
+> — Elon Musk, em tradução livre. [Business Insider](https://www.businessinsider.com/elon-musk-robotics-money-irrelevant-currency-universal-basic-income-2025-11)
+
+O EMA Trader aplica a automação ao monitoramento de mercado e à execução de estratégias com regras explícitas.
+
 - **[Baixar](https://github.com/ramonck/EMATrader/releases/latest)** — A Release inclui Windows e macOS com janela e terminal, e Linux com terminal.
 - **[Começar](knowledge/pt/ORDERS.md)** — Na janela use **Configurações → Idioma e MCP** para trocar o idioma. O terminal aceita `--lang pt|en|es`. Ao habilitar a automação, o app assume automaticamente a posição existente do ativo selecionado.
 - **[Conectar por MCP](knowledge/pt/MCP.md)** — O MCP local permite consultar a instância em andamento, inclusive posição, P&L, sinal e regras.

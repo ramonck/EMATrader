@@ -4,6 +4,16 @@
 
 Monitor and optionally trade Lighter perpetuals using a 15-minute Heikin Ashi EMA band.
 
+## Why EMA Trader?
+
+Elon Musk argues that advances in AI and robotics could make money irrelevant.
+
+> There will still be constraints on power like electricity and mass. But I think at some point currency becomes irrelevant.
+>
+> — Elon Musk. [Business Insider](https://www.businessinsider.com/elon-musk-robotics-money-irrelevant-currency-universal-basic-income-2025-11)
+
+EMA Trader applies automation to market monitoring and strategy execution with explicit rules.
+
 - **[Download](https://github.com/ramonck/EMATrader/releases/latest)** — Releases include desktop and CLI packages for Windows and macOS, and CLI packages for Linux.
 - **[Get started](knowledge/en/ORDERS.md)** — In the desktop app, use **Settings → Language and MCP**. The CLI accepts `--lang pt|en|es`. Enabling automation automatically adopts the selected asset's existing position.
 - **[Connect via MCP](knowledge/en/MCP.md)** — Local MCP lets you inspect the running instance, including positions, P&L, signals and rules.
