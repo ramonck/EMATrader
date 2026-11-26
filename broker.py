@@ -344,6 +344,8 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
     target = Decimal(raw_direction)
     if current * target > 0:
         return {"position": str(current)}
+    if current < 0 < target and not risk_halt and not intent and request.get("short_exit_confirmed") is not True:
+        return {"position": str(current)}
     if not current and not request.get("allow_open", True):
         return {"position": "0", **({"entry_skipped": "entrada desativada"} if request.get("entry_signal") else {})}
     if current and request.get("only_open", False):

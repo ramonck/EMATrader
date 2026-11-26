@@ -11,8 +11,8 @@ from urllib.request import Request, urlopen
 
 import broker
 from app import credentials
-from backtest import replay, short_exit_trend_signals
-from engine import STEP, Candle, Monitor, Signal
+from backtest import replay
+from engine import STEP, Candle, Monitor, Signal, ema_scalping, hourly_trend
 from i18n import tr
 from knowledge import LANGUAGES, TOPICS, knowledge_rule
 from local_mcp import LocalMCP
@@ -192,13 +192,16 @@ class AdoptionTests(unittest.TestCase):
                 create_market_order=send)
             request = {"command": "rotate", "symbol": "BTC", "direction": 1, "candle": 2,
                        "margin": "100", "leverage": 5, "network": "mainnet", "compound": True, "vault": vault}
-            balances = [Row(positions=[row]), Row(positions=[], available_balance="170")]
+            balances = [Row(positions=[row]), Row(positions=[row]), Row(positions=[], available_balance="170")]
             with (patch("broker.account_snapshot", AsyncMock(side_effect=balances)),
                   patch("broker.position", AsyncMock(return_value=(Decimal(0), None))),
                   patch("broker.execution_quote", AsyncMock(return_value=Decimal(60000))),
                   patch("broker.market_depth_price", AsyncMock(return_value=Decimal(60000))),
                   patch("broker.asyncio.sleep", AsyncMock())):
-                result = asyncio.run(broker.execute(None, client, request, 1, 3, path))
+                result = asyncio.run(broker.execute(None, client, dict(request, short_exit_confirmed=False), 1, 3, path))
+                self.assertEqual(result["position"], "-0.00123")
+                send.assert_not_called()
+                result = asyncio.run(broker.execute(None, client, dict(request, short_exit_confirmed=True), 1, 3, path))
             args = send.await_args.args
             self.assertEqual(args[2], 123)
             self.assertFalse(args[4])
@@ -344,16 +347,20 @@ class VaultTests(unittest.TestCase):
 
 class BacktestTests(unittest.TestCase):
     def test_short_exit_uses_only_closed_hour_and_requires_a_real_breakout(self):
-        candles = [Candle(i * STEP, 100, 104, 98, 103 if i != 8 else 100, 10) for i in range(1, 9)]
-        points = [Signal(i * STEP, 102, 99, 1, 1, band, band, "")
-                  for i, band in ((4, -1), (7, 1), (8, 1))]
-        hourly = [Signal(i * STEP, 102, 99, 1, 1, band, band, "") for i, band in ((4, -1), (8, 1))]
-        with patch("backtest.ema_scalping", side_effect=(hourly, points)):
-            self.assertEqual([p.action for p in short_exit_trend_signals(candles)], ["AS"])
-        candles[-1] = Candle(8 * STEP, 100, 104, 98, 103, 10)
-        with patch("backtest.ema_scalping", side_effect=(hourly, points)):
-            self.assertEqual([(p.time, p.action) for p in short_exit_trend_signals(candles)],
-                             [(4 * STEP, "AS"), (8 * STEP, "FS / AL")])
+        prices = [100 - i for i in range(35)] + [66] * 10 + [66 + i * 3 for i in range(30)]
+        candles = [Candle(i * STEP, p, p + 1, p - 1, p, 10) for i, p in enumerate(prices, 1)]
+        hour = 4 * STEP
+        candidate = next(p for p in ema_scalping(candles) if p.action == "FS / AL")
+        next_hour = (candidate.time // hour + 1) * hour
+        # The next hourly close cannot authorize an earlier reversal, and a doji cannot authorize it at that close.
+        with patch("engine.hourly_trend", return_value={next_hour: 1}):
+            self.assertEqual([p.action for p in ema_scalping(candles, trend_confirm_short_exit=True) if p.action], ["AS"])
+            i = next_hour // STEP - 1
+            candle = candles[i]
+            candles[i] = Candle(candle.time, candle.open - 0.5, candle.high, candle.low, candle.close, candle.volume)
+            result = ema_scalping(candles, trend_confirm_short_exit=True)
+            self.assertEqual([(p.time, p.action) for p in result if p.side > 0 and p.action], [(next_hour, "FS / AL")])
+        self.assertTrue(all(t % hour == 0 for t in hourly_trend(candles)))
 
     def test_fixed_margin_tracks_closed_and_open_pnl_separately(self):
         start = 24 * STEP

@@ -5,6 +5,7 @@ import json
 import re
 import time
 from dataclasses import asdict, dataclass
+from itertools import groupby
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -103,15 +104,30 @@ class Signal:
     band: int
     side: int
     action: str
+    short_exit_confirmed: bool = False
 
 
-def ema_scalping(candles, confirmation_bars=1, require_market_close=False):
+def hourly_trend(candles):
+    hour = 4 * STEP
+    hourly = []
+    for slot, group in groupby(candles, lambda candle: (candle.time - 1) // hour):
+        rows = list(group)
+        close_time = (slot + 1) * hour
+        if [row.time for row in rows] == list(range(close_time - 3 * STEP, close_time + STEP, STEP)):
+            hourly.append(Candle(close_time, rows[0].open, max(row.high for row in rows),
+                                 min(row.low for row in rows), rows[-1].close, sum(row.volume for row in rows)))
+    return {point.time: point.side for point in ema_scalping(hourly)}
+
+
+def ema_scalping(candles, confirmation_bars=1, require_market_close=False, *, trend_confirm_short_exit=False):
     points = []
     bands = []
     side = 0
     previous_band = streak = 0
     previous_open = previous_close = None
     upper = lower = None
+    hour = 4 * STEP
+    hourly_side = hourly_trend(candles) if trend_confirm_short_exit else {}
     for candle in candles:
         close = (candle.open + candle.high + candle.low + candle.close) / 4
         opening = (candle.open + candle.close) / 2 if previous_open is None else (previous_open + previous_close) / 2
@@ -126,13 +142,17 @@ def ema_scalping(candles, confirmation_bars=1, require_market_close=False):
         band = 1 if close > upper and up > 0 and down > 0 else -1 if close < lower and up < 0 and down < 0 else 0
         if require_market_close and (band > 0 and candle.close <= upper or band < 0 and candle.close >= lower):
             band = 0
+        confirmed = (band > 0 and hourly_side.get(candle.time // hour * hour) == 1
+                     and candle.close > max(upper, candle.open))
+        if trend_confirm_short_exit and side < 0 and band > 0 and not confirmed:
+            band = 0
         streak = streak + 1 if band and band == previous_band else 1
         previous_band = band
         action = ""
         if band and band != side and streak >= confirmation_bars:
             action = ("FS / AL" if side < 0 else "AL") if band > 0 else ("FL / AS" if side > 0 else "AS")
             side = band
-        points.append(Signal(candle.time, upper, lower, up, down, band, side, action))
+        points.append(Signal(candle.time, upper, lower, up, down, band, side, action, confirmed))
     return points
 
 
@@ -230,7 +250,7 @@ class Monitor:
         for symbol in watched:
             try:
                 candles = candles_for(symbol, network=network)
-                points = ema_scalping(candles)
+                points = ema_scalping(candles, trend_confirm_short_exit=True)
                 if not points or now_ms() - points[-1].time > 2 * STEP:
                     raise ValueError("Candles fechados desatualizados.")
                 results[symbol] = candles, points
@@ -266,6 +286,7 @@ class Monitor:
                     if signal:
                         result = protected_request(managed, command="rotate", candle=signal.time,
                                                    direction=signal.side, trigger="EMA 15m",
+                                                   short_exit_confirmed=signal.short_exit_confirmed,
                                                    retry_entry=(signal is self.entry_retry))
                         self.cursor = signal.time
                         self.entry_retry = signal if result.get("retry_entry") else None

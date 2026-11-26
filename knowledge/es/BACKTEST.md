@@ -19,4 +19,4 @@ python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T
 python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --fee-bps 5
 ```
 
-- Experimentos independientes: `--confirmation-bars 2`, `--require-market-close` y `--trend-confirm-short-exit`. El último solo permite short→long si la última vela cerrada de 1 h tiene tendencia long y la de 15 minutos cierra por encima de su apertura y de la banda superior. La aplicación usa el giro original del indicador.
+- Usa `--trend-confirm-short-exit` para reproducir la regla de la aplicación. El giro short→long exige tendencia long en la última vela cerrada de 1 h y cierre real de 15 minutos por encima de su apertura y de la banda superior. El simulador usa la referencia original por defecto. `--confirmation-bars 2` y `--require-market-close` son comparaciones independientes.

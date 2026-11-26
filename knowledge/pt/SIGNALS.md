@@ -1,6 +1,6 @@
 # SIGNALS · Faixa EMA de 15 min
 - Usa candles fechados de 15 minutos da Lighter para todos os ativos, inclusive BTC. Os candles vêm da rede da conta configurada. Quando nenhuma conta está configurada, o app acompanha a Mainnet. O cálculo usa Heikin Ashi e EMA 21 das máximas e mínimas.
 - Após o aquecimento, compara as duas EMAs com seus valores de 22 candles atrás. Verde exige fechamento Heikin Ashi acima da EMA superior e alta nas duas EMAs. Vermelho exige fechamento abaixo da EMA inferior e queda nas duas. O restante é cinza.
-- O primeiro verde ou vermelho estabelece a direção. Cinza mantém a última direção. Repetir a cor da direção atual não gera uma ordem. A cor oposta gera a virada.
+- A faixa neutra mantém a direção. A virada de long para short segue a faixa de 15 min. Para virar de short para long, a tendência da última barra completa de 1h precisa estar em long e o candle real de 15 min precisa fechar acima da própria abertura e da faixa superior. O app monta a barra de 1h com quatro candles de 15 min fechados da Lighter. Uma tentativa sem confirmação mantém a faixa neutra.
 - **AL** abre long, **FL** fecha long, **AS** abre short, **FS** fecha short. No gráfico são sinais teóricos. A posição e o P&L reais vêm da conta Lighter.
-- Execução usa apenas 15 min. MFI, zonas, Echo e parecer da IA não são gatilhos nesta versão. Código `engine.ema_scalping`.
+- Cada sinal de execução ocorre no fechamento de 15 min. A validação de 1h protege também o short real adotado. O limite de perda da conta e a retomada de fechamentos já iniciados usam suas próprias regras. Código `engine.ema_scalping`, `engine.hourly_trend` e `broker.execute`.

@@ -19,4 +19,4 @@ python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T
 python backtest.py BTCUSDT-5m.csv --start 2026-05-24T03:00:00Z --end 2026-11-24T03:00:00Z --fee-bps 5
 ```
 
-- Experimentos independentes: `--confirmation-bars 2`, `--require-market-close` e `--trend-confirm-short-exit`. O último só permite a transição short→long se a tendência da última barra de 1h fechada for long e a barra de 15 min fechar acima da própria abertura e da banda superior. O app usa a virada original do indicador.
+- Use `--trend-confirm-short-exit` para reproduzir a regra do app. A transição short→long exige tendência long na última barra de 1h fechada, além de fechamento real de 15 min acima da abertura e da banda superior. Sem opções, o simulador reproduz a referência original. `--confirmation-bars 2` e `--require-market-close` são comparações independentes.
