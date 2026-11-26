@@ -11,5 +11,5 @@ Open only relevant topics. IDs are stable across languages.
 - [AI · Compact context for assistants](AI.md)
 - [MCP · Local access to the running instance](MCP.md)
 - [RELEASE · GitHub Actions and publication](RELEASE.md)
-- [BACKTEST · Six-month backtest](BACKTEST.md)
+- [BACKTEST · BTC backtest · six months](BACKTEST.md)
 - [VERIFY · Validation and maintenance](VERIFY.md)

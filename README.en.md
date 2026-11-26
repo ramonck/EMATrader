@@ -21,16 +21,16 @@ python app.py --lang en --subaccounts
 python -m unittest -v
 ```
 
-## Six-month backtest
+## BTC backtest · six months
 
-BTC/USDT on Binance Spot, 2026-05-24 to 2026-11-24, starting and ending at 03:00 UTC. 15-minute EMA band, 1× exposure and compounded equity. Both runs use the same local candle file.
+BTC/USDT on Binance Spot, 2026-05-24 to 2026-11-24 at 03:00 UTC. 15-minute EMA band with **$100 margin per trade at 10×** ($1,000 initial exposure), without reinvesting profits.
 
-| Cost per side | Net ROI | Max drawdown | Closed trades | Winning trades |
+| Cost per side | Closed P&L | Ending open short | Total P&L | Mean ROI per closed trade |
 | --- | ---: | ---: | ---: | ---: |
-| 0.01% | **+26.63%** | 18.35% | 320 | 103 |
-| 0.05% | **−2.03%** | 27.51% | 320 | 96 |
+| 0.01% | +$265.35 | +$20.25 | **+$285.60** | +0.83% |
+| 0.05% | +$9.42 | +$19.46 | **+$28.88** | +0.03% |
 
-ROI includes the ending open short marked at the last close. Compare the cost assumptions when interpreting the results. [Reproduce the backtest and check assumptions](knowledge/en/BACKTEST.md)
+The backtest closed **320 trades**. At 0.01% per side, the best trade earned **$197.92**, 103 trades were profitable and the largest peak-to-trough drop at candle closes was **$198.58**. Mean ROI uses the margin per order. Account ROI requires a starting account balance and enough reserve to fund the strategy. [Assumptions, 1× comparison and reproduction commands](knowledge/en/BACKTEST.md)
 
 ## Connect to local MCP
 

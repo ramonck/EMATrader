@@ -11,5 +11,5 @@ Abre solo los temas pertinentes. Los ID son iguales en los tres idiomas.
 - [AI · Contexto compacto para asistentes](AI.md)
 - [MCP · Consulta local de la instancia en marcha](MCP.md)
 - [RELEASE · GitHub Actions y publicación](RELEASE.md)
-- [BACKTEST · Backtest de seis meses](BACKTEST.md)
+- [BACKTEST · Backtest de BTC · seis meses](BACKTEST.md)
 - [VERIFY · Validación y mantenimiento](VERIFY.md)

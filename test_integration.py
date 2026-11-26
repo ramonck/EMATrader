@@ -10,7 +10,8 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import broker
-from engine import Candle, Monitor, Signal
+from backtest import replay
+from engine import STEP, Candle, Monitor, Signal
 from i18n import tr
 from knowledge import LANGUAGES, TOPICS, knowledge_rule
 from local_mcp import LocalMCP
@@ -140,3 +141,20 @@ class KnowledgeAndMCPTests(unittest.TestCase):
         expected = ("Ordens automáticas ativas para BTC", "Automatic orders enabled for BTC",
                     "Órdenes automáticas activas para BTC")
         self.assertEqual(tuple(tr(language, message, symbol="BTC") for language in LANGUAGES), expected)
+
+
+class BacktestTests(unittest.TestCase):
+    def test_fixed_margin_tracks_closed_and_open_pnl_separately(self):
+        start = 24 * STEP
+        candles = [Candle(i * STEP, 100, 100, 100, 100, 10) for i in range(1, 25)]
+        candles.extend((Candle(start + STEP, 100, 110, 100, 110, 10),
+                        Candle(start + 2 * STEP, 110, 110, 99, 99, 10)))
+        signals = [Signal(start, 1, 1, 0, 0, 1, 1, "AL"),
+                   Signal(start + STEP, 1, 1, 0, 0, -1, -1, "FL / AS")]
+        with patch("backtest.ema_scalping", return_value=signals):
+            result = replay(candles, start, start + 2 * STEP, 0, 100, 10)
+        self.assertEqual(result["closed_trades"], 1)
+        self.assertEqual(result["closed_pnl_usd"], 100)
+        self.assertEqual(result["open_pnl_usd"], 100)
+        self.assertEqual(result["net_pnl_usd"], 200)
+        self.assertEqual(result["avg_closed_margin_roi_pct"], 100)

@@ -21,16 +21,16 @@ python app.py --lang pt --subaccounts
 python -m unittest -v
 ```
 
-## Backtest de seis meses
+## Backtest de BTC · seis meses
 
-BTC/USDT, Binance Spot, de 24/05/2026 a 24/11/2026 às 00h de Brasília. Faixa EMA de 15 minutos, exposição de 1× e reinvestimento do saldo. As duas linhas usam os mesmos candles locais.
+BTC/USDT da Binance Spot, de 24/05/2026 a 24/11/2026 às 00h de Brasília. Faixa EMA de 15 minutos, **US$ 100 de margem por operação a 10×** (US$ 1.000 de exposição inicial), sem reinvestir os lucros.
 
-| Custo por lado | ROI líquido | Queda máxima | Operações fechadas | Operações lucrativas |
+| Custo por lado | P&L das operações fechadas | Short aberto no fim | P&L total | ROI médio por operação fechada |
 | --- | ---: | ---: | ---: | ---: |
-| 0,01% | **+26,63%** | 18,35% | 320 | 103 |
-| 0,05% | **−2,03%** | 27,51% | 320 | 96 |
+| 0,01% | +US$ 265,35 | +US$ 20,25 | **+US$ 285,60** | +0,83% |
+| 0,05% | +US$ 9,42 | +US$ 19,46 | **+US$ 28,88** | +0,03% |
 
-O ROI inclui a posição short que ficou aberta no fim, marcada pelo último fechamento. Compare os custos antes de tirar conclusões. [Reproduzir e conferir as premissas](knowledge/pt/BACKTEST.md)
+Foram **320 operações fechadas**. Com custo de 0,01% por lado, a melhor operação rendeu **US$ 197,92**, 103 operações foram lucrativas e a maior queda acumulada entre fechamentos de candle foi de **US$ 198,58**. O ROI médio usa a margem de cada ordem. Para obter o ROI da conta, é preciso definir o saldo inicial e a reserva para sustentar a estratégia. [Premissas, comparação a 1× e comando para reproduzir](knowledge/pt/BACKTEST.md)
 
 ## Conectar o MCP local
 
