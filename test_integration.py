@@ -18,6 +18,56 @@ from local_mcp import LocalMCP
 
 
 class AdoptionTests(unittest.TestCase):
+    def test_drawdown_halt_persists_and_close_does_not_reverse(self):
+        request = {"drawdown": "25", "network": "testnet", "account": 1, "key": "test", "command": "risk"}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "testnet-1.json"
+            self.assertFalse(broker.account_risk(path, request, Row(total_asset_value="120", positions=[])))
+            self.assertTrue(broker.account_risk(path, request, Row(total_asset_value="90", positions=[])))
+            self.assertTrue(broker.account_risk(path, request, Row(total_asset_value="130", positions=[])))
+            self.assertFalse(broker.account_risk(path, request, Row(total_asset_value="130", positions=[]), rearm=True))
+            client = Row(check_client=lambda: None, close=AsyncMock())
+            sdk = Row(SignerClient=lambda *_: client)
+            close = {"position": "0", "action": "Fechar long", "risk_halt": True}
+            with patch("broker.execute", AsyncMock(return_value=close)) as execute:
+                result = asyncio.run(broker.connect(sdk, request, 1, 3, path))
+            execute.assert_awaited_once()
+            self.assertTrue(result["paused"])
+            self.assertEqual(result["actions"], [close])
+
+    def test_entry_uses_available_balance_below_base(self):
+        with tempfile.TemporaryDirectory() as directory:
+            journal = Path(directory) / "Lighter"
+            journal.mkdir()
+            path = journal / "mainnet-1.json"
+            market = Row(symbol="BTC", market_type="perp", status="active", market_id=1,
+                         size_decimals=2, price_decimals=2, min_initial_margin_fraction=1000,
+                         min_base_amount="0.01", min_quote_amount="1")
+            flat = Row(positions=[Row(market_id=1, position="0", sign=0, margin_mode=1,
+                                      initial_margin_fraction="10")], available_balance="60", pending_order_count=0)
+            send = AsyncMock(return_value=(None, Row(code=200, tx_hash="test"), None))
+            client = Row(order_api=Row(
+                order_book_details=AsyncMock(return_value=Row(order_book_details=[market])),
+                account_active_orders=AsyncMock(return_value=Row(orders=[])),
+                account_inactive_orders=AsyncMock(side_effect=lambda *_: Row(orders=[
+                    Row(client_order_index=send.await_args.args[1], filled_base_amount="6",
+                        filled_quote_amount="600", status="filled", updated_at=3)]))),
+                create_auth_token_with_expiry=lambda **_: ("token", None),
+                create_market_order=send)
+            sdk = Row(SignerClient=Row(ISOLATED_MARGIN_MODE=1))
+            request = {"command": "rotate", "symbol": "BTC", "direction": 1, "candle": 2,
+                       "margin": "100", "leverage": 10, "network": "mainnet", "compound": True}
+            with (patch("broker.account_snapshot", AsyncMock(return_value=flat)),
+                  patch("broker.position", AsyncMock(return_value=(Decimal(6), None))),
+                  patch("broker.execution_quote", AsyncMock(return_value=Decimal(100))),
+                  patch("broker.market_depth_price", AsyncMock(return_value=Decimal(100))),
+                  patch("broker.asyncio.sleep", AsyncMock())):
+                result = asyncio.run(broker.execute(sdk, client, request, 1, 3, path))
+            self.assertEqual(send.await_args.args[2], 600)
+            self.assertEqual(result["position"], "6")
+            self.assertEqual(json.loads(path.read_text())["reinvestment"],
+                             {"base": "100", "next": "60", "before": "60"})
+
     def test_adoption_reads_full_signed_position_without_trading(self):
         for sign in (-1, 1):
             with self.subTest(sign=sign), tempfile.TemporaryDirectory() as directory:
@@ -59,7 +109,8 @@ class AdoptionTests(unittest.TestCase):
             journal = Path(directory) / "Lighter"
             journal.mkdir()
             path = journal / "mainnet-1.json"
-            path.write_text('{"position":"-0.00123","candle":1}')
+            path.write_text('{"position":"-0.00123","candle":1,'
+                            '"reinvestment":{"base":"100","next":"100","before":"150"}}')
             market = Row(symbol="BTC", market_type="perp", status="active", market_id=1,
                          size_decimals=5, price_decimals=2)
             row = Row(market_id=1, position="0.00123", sign=-1)
@@ -74,8 +125,9 @@ class AdoptionTests(unittest.TestCase):
                 create_auth_token_with_expiry=lambda **_: ("token", None),
                 create_market_order=send)
             request = {"command": "rotate", "symbol": "BTC", "direction": 1, "candle": 2,
-                       "margin": "100", "leverage": 5, "network": "mainnet"}
-            with (patch("broker.account_snapshot", AsyncMock(return_value=Row(positions=[row]))),
+                       "margin": "100", "leverage": 5, "network": "mainnet", "compound": True}
+            balances = [Row(positions=[row]), Row(positions=[], available_balance="170")]
+            with (patch("broker.account_snapshot", AsyncMock(side_effect=balances)),
                   patch("broker.position", AsyncMock(return_value=(Decimal(0), None))),
                   patch("broker.execution_quote", AsyncMock(return_value=Decimal(60000))),
                   patch("broker.market_depth_price", AsyncMock(return_value=Decimal(60000))),
@@ -87,6 +139,9 @@ class AdoptionTests(unittest.TestCase):
             self.assertTrue(send.await_args.kwargs["reduce_only"])
             self.assertEqual(result["position"], "0")
             self.assertEqual(result["action"], "Fechar short")
+            self.assertEqual(result["next_margin_usd"], "120")
+            self.assertEqual(json.loads(path.read_text())["reinvestment"],
+                             {"base": "100", "next": "120", "pnl": "20"})
 
 
 class KnowledgeAndMCPTests(unittest.TestCase):
@@ -158,3 +213,19 @@ class BacktestTests(unittest.TestCase):
         self.assertEqual(result["open_pnl_usd"], 100)
         self.assertEqual(result["net_pnl_usd"], 200)
         self.assertEqual(result["avg_closed_margin_roi_pct"], 100)
+
+    def test_reinvestment_and_reset_use_the_available_balance(self):
+        start = 24 * STEP
+        signals = [Signal(start, 1, 1, 0, 0, 1, 1, "AL"),
+                   Signal(start + STEP, 1, 1, 0, 0, -1, -1, "FL / AS")]
+        for reversal_price, closed, open_pnl in ((110, 100, 200), (95, -50, 50)):
+            with self.subTest(price=reversal_price):
+                candles = [Candle(i * STEP, 100, 100, 100, 100, 10) for i in range(1, 25)]
+                last_price = reversal_price * 0.9
+                candles.extend((Candle(start + STEP, 100, 110, 95, reversal_price, 10),
+                                Candle(start + 2 * STEP, reversal_price, reversal_price, last_price, last_price, 10)))
+                with patch("backtest.ema_scalping", return_value=signals):
+                    result = replay(candles, start, start + 2 * STEP, 0, 100, 10, compound=True)
+                self.assertEqual(result["closed_pnl_usd"], closed)
+                self.assertEqual(result["open_pnl_usd"], open_pnl)
+        self.assertEqual(broker.next_margin(100, 150, -10), 100)

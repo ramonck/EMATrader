@@ -19,12 +19,14 @@ def label(side, language):
     return "Long" if side > 0 else "Short" if side < 0 else tr(language, "Zerado")
 
 
-def credentials(symbol, network, account, key, key_index, margin, leverage):
+def credentials(symbol, network, account, key, key_index, margin, leverage, drawdown=Decimal("25")):
     symbol_key(symbol)
     if account < 0 or not 0 <= key_index <= 254 or not key or not 1 <= leverage <= 20 or not 0 < margin <= 1_000_000:
         raise ValueError("Confira a conta, chave, margem e alavancagem.")
+    if not drawdown.is_finite() or not 0 < drawdown < 100:
+        raise ValueError("Limite de perda da conta inválido.")
     return {"symbol": symbol, "network": network, "account": account, "key": key, "key_index": key_index,
-            "margin": str(margin), "leverage": leverage}
+            "margin": str(margin), "leverage": leverage, "compound": True, "drawdown": str(drawdown)}
 
 
 def cli(args):
@@ -51,7 +53,7 @@ def run_cli(args, monitor, mcp):
         if args.account is None or (args.network == "mainnet" and not args.confirm_mainnet):
             raise ValueError("Informe --account; para ordens reais, também --confirm-mainnet.")
         monitor.arm(credentials(args.symbol, args.network, args.account, os.environ.get("LIGHTER_API_KEY"),
-                                args.key_index, args.margin, args.leverage))
+                                args.key_index, args.margin, args.leverage, args.drawdown))
     while True:
         candles, points, orders, errors = monitor.snapshot(args.symbol)
         if mcp.port:
@@ -118,12 +120,32 @@ def gui(profile="DEFAULT", language=None):
     browse_until = 0
     last_chart = None
     last_view = None
+    assets = ("BTC",)
 
     toolbar = ttk.Frame(root, padding=(18, 12))
     toolbar.pack(fill="x")
     ttk.Label(toolbar, text="EMA Trader", font=("TkDefaultFont", 18, "bold")).pack(side="left", padx=(0, 18))
+    localize(ttk.Label(toolbar), "Buscar ativo").pack(side="left")
+    search = tk.StringVar()
+    search_field = ttk.Entry(toolbar, textvariable=search, width=9)
+    search_field.pack(side="left", padx=(4, 0))
     choice = ttk.Combobox(toolbar, textvariable=selected, state="readonly", width=12, values=("BTC",))
     choice.pack(side="left", padx=4)
+
+    def filter_assets(*_):
+        query = search.get().strip().upper()
+        matches = sorted((symbol for symbol in assets if query in symbol),
+                         key=lambda symbol: (symbol != query, not symbol.startswith(query), symbol))
+        choice.configure(values=matches)
+        return matches
+
+    def select_match(_):
+        if not busy and (matches := filter_assets()):
+            selected.set(matches[0])
+            change(None)
+
+    search.trace_add("write", filter_assets)
+    search_field.bind("<Return>", select_match)
     refresh_button = localize(ttk.Button(toolbar, command=lambda: refresh()), "Atualizar")
     refresh_button.pack(side="left", padx=4)
     settings_button = localize(ttk.Button(toolbar, command=lambda: settings()), "Configurações")
@@ -222,9 +244,10 @@ def gui(profile="DEFAULT", language=None):
             return result, sorted(set(markets()) | {"BTC", symbol})
 
         def show(result):
-            nonlocal last_view
+            nonlocal last_view, assets
             (candles, points, orders, errors), catalog = result
-            choice.configure(values=catalog)
+            assets = catalog
+            filter_assets()
             last_view = symbol, candles, points, errors
             render()
             if beep.get():
@@ -278,6 +301,7 @@ def gui(profile="DEFAULT", language=None):
     def change(_):
         nonlocal browse_until, last_chart, last_view
         browse_until = time.time() + 300
+        search.set("")
         last_chart = None
         last_view = None
         render()
@@ -362,7 +386,9 @@ def gui(profile="DEFAULT", language=None):
         ttk.Button(general, text=t("Subcontas"), command=show_subaccounts).grid(row=5, column=1, pady=6)
         values = {}
         for i, (name, default) in enumerate((("Rede", prefs.get("network", "testnet")), ("Índice da conta", str(prefs.get("account", ""))),
-                ("Índice da chave", "3"), ("Chave privada", ""), ("Margem USD", "100"), ("Alavancagem", "5"))):
+                ("Índice da chave", "3"), ("Chave privada", ""), ("Margem base USD", prefs.get("margin", "100")),
+                ("Alavancagem", str(prefs.get("leverage", 5))),
+                ("Limite de perda da conta (%)", prefs.get("drawdown", "25")))):
             ttk.Label(form, text=t(name)).grid(row=i, column=0, sticky="w", pady=4)
             var = tk.StringVar(value=default)
             values[name] = var
@@ -379,7 +405,8 @@ def gui(profile="DEFAULT", language=None):
                 if idx < 0:
                     raise ValueError("Índice inválido.")
                 config = credentials(symbol, network, idx, values["Chave privada"].get(), int(values["Índice da chave"].get()),
-                                     Decimal(values["Margem USD"].get()), int(values["Alavancagem"].get())) if trade else None
+                                     Decimal(values["Margem base USD"].get()), int(values["Alavancagem"].get()),
+                                     Decimal(values["Limite de perda da conta (%)"].get())) if trade else None
             except (ValueError, ArithmeticError) as error:
                 messagebox.showerror(t("Configurações"), translate_error(language, error), parent=win)
                 return
@@ -404,6 +431,8 @@ def gui(profile="DEFAULT", language=None):
 
             def saved(_):
                 prefs.update(symbol=selected.get(), network=network, account=idx, beep=beep.get(), language=language)
+                if config:
+                    prefs.update(margin=config["margin"], leverage=config["leverage"], drawdown=config["drawdown"])
                 write(preferences_path, prefs)
                 render()
                 refresh()
@@ -440,6 +469,7 @@ def main():
     parser.add_argument("--key-index", type=int, default=3)
     parser.add_argument("--margin", type=Decimal, default=Decimal("100"))
     parser.add_argument("--leverage", type=int, default=5)
+    parser.add_argument("--drawdown", type=Decimal, default=Decimal("25"))
     parser.add_argument("--mcp-port", type=int, help=tr(language, "usar consulta local via MCP na porta indicada"))
     parser.add_argument("--trade", action="store_true")
     parser.add_argument("--confirm-mainnet", action="store_true")

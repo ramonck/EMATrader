@@ -8,6 +8,7 @@ from itertools import groupby
 from pathlib import Path
 
 from engine import STEP, Candle, ema_scalping
+from broker import next_margin
 
 FIVE_MINUTES = STEP // 3
 
@@ -37,7 +38,7 @@ def candles_from_csv(path):
             previous = end
 
 
-def replay(candles, start, end, fee, margin_usd=None, leverage=1):
+def replay(candles, start, end, fee, margin_usd=None, leverage=1, compound=False, stop_loss=0, max_account_drawdown=0):
     if start >= end or start % STEP or end % STEP or not 0 <= fee < 1:
         raise ValueError("Provide aligned start/end times and a valid fee")
     if not candles or candles[0].time > start - 22 * STEP or candles[-1].time < end:
@@ -46,18 +47,39 @@ def replay(candles, start, end, fee, margin_usd=None, leverage=1):
         raise ValueError("Margin must be positive and leverage must be between 1 and 20")
     if leverage != 1 and margin_usd is None:
         raise ValueError("--leverage requires --margin-usd")
+    if compound and margin_usd is None:
+        raise ValueError("--compound requires --margin-usd")
+    if not 0 <= stop_loss < 1:
+        raise ValueError("Stop loss must be between 0% and 100% of margin")
+    if not 0 <= max_account_drawdown < 1:
+        raise ValueError("Account drawdown must be between 0% and 100%")
     signals = {point.time: point for point in ema_scalping(candles) if point.action}
     starting_value = margin_usd if margin_usd is not None else 1.0
     equity = high_water = starting_value
+    order_margin = target_margin = starting_value
     drawdown = drawdown_cash = 0.0
     units = 0.0
     direction = 0
     entry_price = 0.0
     trades = wins = 0
     best = worst = None
+    stops = 0
+    halt_signal = None
     worst_unrealized = 0.0
     final_price = candles[-1].close
     first_price = None
+
+    def settle(price):
+        nonlocal equity, target_margin, trades, wins, best, worst, units, direction
+        pnl = units * (direction * (price - entry_price) - fee * (entry_price + price))
+        equity += pnl
+        if compound:
+            target_margin = next_margin(margin_usd, order_margin, pnl)
+        trades += 1
+        wins += pnl > 0
+        best = pnl if best is None else max(best, pnl)
+        worst = pnl if worst is None else min(worst, pnl)
+        units = direction = 0
 
     for candle in candles:
         bar_open = candle.time - STEP
@@ -65,39 +87,60 @@ def replay(candles, start, end, fee, margin_usd=None, leverage=1):
             continue
         if first_price is None:
             first_price = candle.open
-        signal = signals.get(bar_open)
-        if signal and (margin_usd is not None or equity > 0):
+        signal = signals.get(bar_open) if halt_signal is None else None
+        if halt_signal is not None and direction:
+            settle(candle.open)
+        stop_price = entry_price * (1 - direction * stop_loss / leverage)
+        gap_stop = stop_loss and direction and direction * (candle.open - stop_price) <= 0
+        if gap_stop:
+            settle(candle.open)
+            stops += 1
+        if signal and not gap_stop and (direction or equity > 0 or (margin_usd is not None and not compound)):
             if direction:
-                pnl = units * (direction * (candle.open - entry_price) - fee * (entry_price + candle.open))
-                equity += pnl
-                trades += 1
-                wins += pnl > 0
-                best = pnl if best is None else max(best, pnl)
-                worst = pnl if worst is None else min(worst, pnl)
-            order_margin = margin_usd if margin_usd is not None else max(equity, 0)
+                settle(candle.open)
+            if compound:
+                order_margin = min(target_margin, max(equity, 0))
+            else:
+                order_margin = margin_usd if margin_usd is not None else max(equity, 0)
             direction = signal.side if order_margin else 0
             entry_price = candle.open
             units = order_margin * leverage / entry_price
 
         final_price = candle.close
+        adverse = candle.low if direction > 0 else candle.high
+        stop_price = entry_price * (1 - direction * stop_loss / leverage)
+        if stop_loss and direction and direction * (adverse - stop_price) <= 0:
+            settle(stop_price)
+            stops += 1
         marked = equity + units * (direction * (final_price - entry_price) - fee * (entry_price + final_price))
         high_water = max(high_water, marked)
         drawdown = max(drawdown, 1 - marked / high_water)
+        if max_account_drawdown and drawdown >= max_account_drawdown and halt_signal is None:
+            halt_signal = candle.time
         drawdown_cash = max(drawdown_cash, high_water - marked)
-        adverse = candle.low if direction > 0 else candle.high
         worst_unrealized = min(worst_unrealized, units * (
             direction * (adverse - entry_price) - fee * (entry_price + adverse)))
 
     hold = final_price / first_price - 1 - fee * (1 + final_price / first_price)
     common = {"closed_trades": trades, "wins": wins, "open_side": direction}
+    if stop_loss:
+        common["stop_exits"] = stops
+    if max_account_drawdown:
+        common["account_halt_signal_ms"] = halt_signal
     if margin_usd is not None:
-        return dict(common, net_pnl_usd=round(marked - starting_value, 4),
+        result = dict(common, net_pnl_usd=round(marked - starting_value, 4),
                     closed_pnl_usd=round(equity - starting_value, 4), open_pnl_usd=round(marked - equity, 4),
                     avg_closed_margin_roi_pct=round((equity - starting_value) / trades / margin_usd * 100, 4) if trades else None,
                     max_peak_to_trough_usd=round(drawdown_cash, 4),
                     best_trade_usd=round(best, 4) if best is not None else None,
                     worst_trade_usd=round(worst, 4) if worst is not None else None,
                     worst_intrabar_trade_pnl_usd=round(worst_unrealized, 4))
+        if compound:
+            result.update(ending_equity_usd=round(marked, 4),
+                          max_drawdown_pct=round(drawdown * 100, 4),
+                          roi_pct=round((marked / starting_value - 1) * 100, 4))
+            result.pop("avg_closed_margin_roi_pct")
+        return result
     return dict(common, roi_pct=round((marked - 1) * 100, 4), closed_roi_pct=round((equity - 1) * 100, 4),
                 max_drawdown_pct=round(drawdown * 100, 4), buy_hold_pct=round(hold * 100, 4))
 
@@ -108,11 +151,16 @@ def main():
     parser.add_argument("--start", required=True, type=utc_ms)
     parser.add_argument("--end", required=True, type=utc_ms)
     parser.add_argument("--fee-bps", type=float, default=1, help="assumed fee per side in basis points")
-    parser.add_argument("--margin-usd", type=float, help="fixed USD margin per trade, with no reinvestment")
+    parser.add_argument("--margin-usd", type=float, help="USD margin per trade, or starting margin with --compound")
     parser.add_argument("--leverage", type=int, default=1)
+    parser.add_argument("--compound", action="store_true", help="reinvest wins, reset to base after losses, limited by equity")
+    parser.add_argument("--stop-loss", type=float, default=0, help="stop loss as a percent of margin, before fees")
+    parser.add_argument("--max-account-drawdown", type=float, default=0,
+                        help="percent drawdown from peak equity that closes next bar and halts trading")
     args = parser.parse_args()
     with_candles = list(candles_from_csv(args.csv))
-    result = replay(with_candles, args.start, args.end, args.fee_bps / 10000, args.margin_usd, args.leverage)
+    result = replay(with_candles, args.start, args.end, args.fee_bps / 10000,
+                    args.margin_usd, args.leverage, args.compound, args.stop_loss / 100, args.max_account_drawdown / 100)
     print(json.dumps(result, indent=2))
 
 

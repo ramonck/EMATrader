@@ -6,6 +6,23 @@ from string import Formatter
 LANGUAGES = {"pt": "Português", "en": "English", "es": "Español"}
 
 MESSAGES = {
+    "Buscar ativo": ("Find asset", "Buscar activo"),
+    "Limite de perda da conta (%)": ("Account drawdown limit (%)", "Límite de caída de la cuenta (%)"),
+    "Limite de perda da conta inválido.": ("Invalid account drawdown limit.", "Límite de caída de la cuenta inválido."),
+    "Saldo total da conta indisponível.": ("Account equity unavailable.", "Patrimonio de la cuenta no disponible."),
+    "Limite de perda da conta atingido. Automação pausada.": (
+        "Account drawdown limit reached. Automation paused.", "Se alcanzó el límite de caída de la cuenta. Automatización en pausa."),
+    "A conta continua pausada. Zere a posição antes de reiniciar o limite de perda.": (
+        "The account is still paused. Close the position before resetting the drawdown limit.",
+        "La cuenta sigue en pausa. Cierra la posición antes de reiniciar el límite de caída."),
+    "Margem base USD": ("Base margin (USD)", "Margen base (USD)"),
+    "Sem saldo disponível para a próxima operação.": (
+        "No available balance for the next trade.", "No hay saldo disponible para la próxima operación."),
+    "O saldo disponível mudou antes do envio da ordem.": (
+        "The available balance changed before order submission.", "El saldo disponible cambió antes de enviar la orden."),
+    "Não foi possível conciliar o saldo para reinvestir.": (
+        "Could not reconcile the balance for reinvestment.",
+        "No se pudo conciliar el saldo para reinvertir."),
     "Defina EMA_TRADER_MCP_TOKEN para habilitar o MCP no terminal.": (
         "Set EMA_TRADER_MCP_TOKEN to enable MCP in the terminal.",
         "Define EMA_TRADER_MCP_TOKEN para activar MCP en la terminal."),

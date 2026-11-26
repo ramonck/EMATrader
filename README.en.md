@@ -21,6 +21,9 @@ EMA Trader applies automation to market monitoring and strategy execution with e
 
 To build and publish a version, open **Actions → Compilar EMA Trader → Run workflow**. The Action creates the tag and publishes a Release with all five packages. [GitHub Actions](knowledge/en/RELEASE.md)
 
+**Find an asset.** Type `BTC` or `NVDA` into **Find asset**. The list filters the Lighter catalog’s symbols. Press **Enter** to select the first result.
+
+
 ## Run from source
 
 ```sh
@@ -33,14 +36,16 @@ python -m unittest -v
 
 ## BTC backtest · six months
 
-BTC/USDT on Binance Spot, 2026-05-24 to 2026-11-24 at 03:00 UTC. 15-minute EMA band with **$100 margin per trade at 10×** ($1,000 initial exposure), without reinvesting profits.
+BTC/USDT on Binance Spot, 2026-05-24 to 2026-11-24 at 03:00 UTC. 15-minute EMA band with **$100 starting equity and base margin**. After a win, the next margin includes the realized profit. After a loss, the target resets to $100. Each entry is capped at available equity, with no top-ups.
 
-| Cost per side | Closed P&L | Ending open short | Total P&L | Mean ROI per closed trade |
-| --- | ---: | ---: | ---: | ---: |
-| 0.01% | +$265.35 | +$20.25 | **+$285.60** | +0.83% |
-| 0.05% | +$9.42 | +$19.46 | **+$28.88** | +0.03% |
+| Cost per side | Leverage | Ending equity | Account ROI | Max drawdown | Closed trades |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0.01% | 1× | $127.00 | +27.00% | 17.88% | 320 |
+| 0.01% | 10× | $77.63 | −22.37% | 25.19% | 6 |
+| 0.05% | 1× | $82.82 | −17.18% | 25.05% | 284 |
+| 0.05% | 10× | $77.19 | −22.81% | 25.05% | 4 |
 
-The backtest closed **320 trades**. At 0.01% per side, the best trade earned **$197.92**, 103 trades were profitable and the largest peak-to-trough drop at candle closes was **$198.58**. Mean ROI uses the margin per order. Account ROI requires a starting account balance and enough reserve to fund the strategy. [Assumptions, 1× comparison and reproduction commands](knowledge/en/BACKTEST.md)
+The simulation uses a 25% drawdown trigger from peak equity. When a 15-minute close reaches it, the next bar opens with a position exit and trading halts. Drawdown can exceed the trigger before the exit. See [assumptions and commands](knowledge/en/BACKTEST.md) for unprotected and per-trade stop results.
 
 ## Connect to local MCP
 

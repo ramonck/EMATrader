@@ -6,7 +6,7 @@ import sys
 import time
 from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 from pathlib import Path
-from storage import account_lock, data_root, write
+from storage import account_lock, data_root, read, write
 
 NETWORKS = {
     "testnet": "https://testnet.zklighter.elliot.ai",
@@ -16,6 +16,34 @@ NETWORKS = {
 
 class BridgeError(Exception):
     pass
+
+
+def next_margin(base, used, pnl):
+    return base if pnl < 0 else max(base, used + pnl)
+
+
+RISK_HALT = "Limite de perda da conta atingido. Automação pausada."
+
+
+def account_risk(state_path, request, snapshot, rearm=False):
+    percent = Decimal(str(request.get("drawdown", 0)))
+    if not 0 < percent < 100:
+        raise BridgeError("Limite de perda da conta inválido.")
+    equity = Decimal(snapshot.total_asset_value)
+    if not equity.is_finite():
+        raise BridgeError("Saldo total da conta indisponível.")
+    path = state_path.parent / "risk" / f'{request["network"]}-{request["account"]}.json'
+    saved = state = read(path, {})
+    if rearm and state.get("halted"):
+        if any(Decimal(row.position) for row in snapshot.positions):
+            raise BridgeError("A conta continua pausada. Zere a posição antes de reiniciar o limite de perda.")
+        state = {}
+    peak = max(equity, Decimal(state.get("peak", 0)))
+    halted = bool(state.get("halted")) or (peak > 0 and equity <= peak * (1 - percent / 100))
+    updated = {"peak": str(peak), "halted": halted}
+    if updated != saved:
+        write(path, updated)
+    return halted
 
 
 async def account_snapshot(sdk, client, account):
@@ -53,6 +81,7 @@ async def ensure_account_flat(sdk, client, account, auth, state_path):
         name = journal.stem.split("-", 2)
         if name[:2] == prefix and json.loads(journal.read_text(encoding="utf-8")).get("pending"):
             raise BridgeError("Há uma execução pendente no diário desta conta.")
+    return snapshot
 
 
 def save_state(path, state):
@@ -139,12 +168,23 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
             if active.orders or config.pending_order_count:
                 raise BridgeError("Há ordem ativa ou pendente neste mercado. Confira antes de assumir.")
             if Decimal(state["position"]) != current:
+                state.pop("reinvestment", None)
                 save_state(state_path, dict(state, position=str(current), adopted_at=int(time.time() * 1000)))
+        if request.get("drawdown") and account_risk(state_path, request, snapshot, rearm=True):
+            raise BridgeError(RISK_HALT)
         return {"ready": True, "position": str(current), "market": market_id, "positions": public_positions(snapshot)}
     if state.get("pending") or Decimal(state["position"]) != current:
         raise BridgeError("Estado da posição divergente ou ordem pendente. Confira a conta e o diário antes de retomar.")
-    candle = int(request["candle"])
-    raw_direction = int(request["direction"])
+    risk_halt = request.get("drawdown") and account_risk(state_path, request, snapshot)
+    if (not current and risk_halt) or (command == "risk" and not risk_halt):
+        return {"position": str(current), "risk_halt": bool(risk_halt)}
+    if risk_halt:
+        candle = max(int(time.time() * 1000), state["candle"] + 1)
+        raw_direction = -1 if current > 0 else 1
+        command = "rotate"
+    else:
+        candle = int(request["candle"])
+        raw_direction = int(request["direction"])
     if raw_direction not in (-1, 1) or candle < state["candle"] or (
         candle == state["candle"] and not continue_rotation
     ):
@@ -160,14 +200,16 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
     if active.orders:
         raise BridgeError(f"Há ordens {symbol} abertas na conta selecionada.")
 
-    margin = Decimal(str(request["margin"]))
+    base_margin = Decimal(str(request["margin"]))
+    margin = base_margin
     leverage = int(request["leverage"])
-    book_price = request["command"] == "rotate" and "slippage" not in request
+    book_price = command == "rotate" and "slippage" not in request
     slippage = Decimal(str(request.get("slippage", 0))) / 100
     if not (0 < margin <= 1000000 and 1 <= leverage <= 20 and
             (book_price or 0 < slippage <= Decimal("0.05"))):
         raise BridgeError("Margem, alavancagem ou desvio de preço inválido.")
     closing = current != 0
+    compound = request.get("compound") and command == "rotate"
     selling = current > 0 if closing else target < 0
     entry_levels = None
     if not closing and "prior_high" in request:
@@ -197,6 +239,16 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
             quote = await execution_quote(client, market_id, selling, entry_levels)
             if quote is None:
                 return {"position": "0", "entry_skipped": "livro Lighter"}
+        if compound:
+            snapshot = await account_snapshot(sdk, client, account)
+            available = Decimal(snapshot.available_balance)
+            saved_margin = state.get("reinvestment", {})
+            if Decimal(saved_margin.get("base", base_margin)) == base_margin:
+                margin = max(base_margin, Decimal(saved_margin.get("next", base_margin)))
+            if not available.is_finite() or available <= 0:
+                raise BridgeError("Sem saldo disponível para a próxima operação.")
+            margin = min(margin, available)
+            state["reinvestment"] = {"base": str(base_margin), "next": str(margin), "before": str(available)}
 
     size_scale = Decimal(10) ** market.size_decimals
     price_scale = Decimal(10) ** market.price_decimals
@@ -211,12 +263,17 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
                         Decimal(amount) / size_scale * quote < Decimal(market.min_quote_amount)):
         raise BridgeError("Quantidade abaixo do mínimo da Lighter.")
     if not closing and command == "rotate":
-        await ensure_account_flat(sdk, client, account, auth, state_path)
+        flat = await ensure_account_flat(sdk, client, account, auth, state_path)
+        if compound:
+            available = Decimal(flat.available_balance)
+            if not available.is_finite() or available < margin:
+                raise BridgeError("O saldo disponível mudou antes do envio da ordem.")
+            state["reinvestment"]["before"] = str(available)
     bound = (market_limit if book_price else quote * (1 - slippage if selling else 1 + slippage)) * price_scale
     limit = int(bound.to_integral_value(rounding=ROUND_CEILING if selling else ROUND_FLOOR))
     order_index = max(time.time_ns() // 1_000_000, int(state.get("last", {}).get("order", 0)) + 1)
     action = ("Fechar long" if current > 0 else "Fechar short") if closing else ("Abrir short" if selling else "Abrir long")
-    save_state(state_path, {"position": str(current), "candle": candle, "pending": order_index, "action": action})
+    save_state(state_path, dict(state, position=str(current), candle=candle, pending=order_index, action=action))
     sent = acknowledge(await client.create_market_order(
         market_id, order_index, amount, limit, selling, reduce_only=closing, api_key_index=key_index), "ordem")
     for _ in range(12):
@@ -227,20 +284,45 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
             continue
         filled = Decimal(order.filled_base_amount)
         expected = current + (-filled if selling else filled)
-        after, _ = await position(sdk, client, account, market_id)
+        reinvestment = state.get("reinvestment")
+        if compound and closing and not expected and reinvestment and "before" in reinvestment:
+            settled = await account_snapshot(sdk, client, account)
+            after, _ = market_position(settled, market_id)
+            if not after:
+                actual = Decimal(settled.available_balance)
+                if not actual.is_finite() or any(Decimal(row.position) for row in settled.positions):
+                    raise BridgeError("Não foi possível conciliar o saldo para reinvestir.")
+                pnl = actual - Decimal(reinvestment["before"])
+                used = Decimal(reinvestment["next"]) if Decimal(reinvestment["base"]) == base_margin else base_margin
+                reinvestment = {"base": str(base_margin), "next": str(next_margin(base_margin, used, pnl)),
+                                "pnl": str(pnl)}
+                state["reinvestment"] = reinvestment
+        else:
+            after, _ = await position(sdk, client, account, market_id)
         if after != expected:
             continue
         report = {"position": str(after), "action": action, "filled": str(filled), "order": str(order_index),
                   "price": str(Decimal(order.filled_quote_amount) / filled) if filled else "0",
                   "status": order.status, "hash": sent.tx_hash, "time": order.updated_at,
                   "partial": filled < Decimal(amount) / size_scale}
-        audit = dict(report, network=request["network"], candle=candle, trigger=request.get("trigger"), margin_usd=str(margin),
+        if risk_halt:
+            report["risk_halt"] = True
+        if compound and closing and not after and reinvestment and "pnl" in reinvestment:
+            report.update(reinvestment_pnl_usd=reinvestment["pnl"], next_margin_usd=reinvestment["next"])
+        if compound and not closing and not after:
+            state["reinvestment"].pop("before", None)
+        audit = dict(report, network=request["network"], candle=candle,
+                     trigger="Account drawdown" if risk_halt else request.get("trigger"), margin_usd=str(margin),
                      leverage=leverage, account=account, symbol=symbol)
         with (state_path.parent.parent / "operacoes-lighter.jsonl").open("a", encoding="utf-8") as file:
             file.write(json.dumps(audit) + "\n")
             file.flush()
             os.fsync(file.fileno())
-        save_state(state_path, {"position": str(after), "candle": candle, "last": report})
+        state.pop("pending", None)
+        state.pop("action", None)
+        if not compound:
+            state.pop("reinvestment", None)
+        save_state(state_path, dict(state, position=str(after), candle=candle, last=report))
         return report
     raise BridgeError("Execução não conciliada. O diário bloqueou outros envios até revisão da ordem.")
 
@@ -273,13 +355,15 @@ async def connect(sdk, request, account, key_index, path):
         if client.check_client():
             raise BridgeError("A chave informada não corresponde à conta ou à rede da Lighter.")
         result = await execute(sdk, client, request, account, key_index, path)
-        if request["command"] != "rotate":
+        if request["command"] not in ("rotate", "risk"):
             return result
+        risk_halt = result.get("risk_halt", False)
         actions = [result] if result.get("action") else []
         closing = result.get("action", "").startswith("Fechar")
         if not closing:
             return {"actions": actions, "position": result["position"],
-                    "paused": bool(result.get("partial") or result.get("entry_skipped"))}
+                    "paused": bool(risk_halt or result.get("partial") or result.get("entry_skipped")),
+                    **({"reason": RISK_HALT} if risk_halt else {})}
         for _ in range(2):
             if Decimal(result["position"]) == 0:
                 break
@@ -293,6 +377,8 @@ async def connect(sdk, request, account, key_index, path):
                 actions.append(result)
         if Decimal(result["position"]) != 0:
             return {"actions": actions, "position": result["position"], "paused": True, "close_pending": True}
+        if risk_halt:
+            return {"actions": actions, "position": result["position"], "paused": True, "reason": RISK_HALT}
         try:
             result = await execute(sdk, client, request, account, key_index, path, continue_rotation=True)
         except Exception as error:

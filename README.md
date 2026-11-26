@@ -21,6 +21,9 @@ O EMA Trader aplica a automação ao monitoramento de mercado e à execução de
 
 Para gerar e publicar uma versão, abra **Actions → Compilar EMA Trader → Run workflow**. O próprio Action cria a tag e publica a Release com os cinco pacotes. [GitHub Actions](knowledge/pt/RELEASE.md)
 
+**Busca de ativos.** Digite `BTC` ou `NVDA` no campo **Buscar ativo**. A lista filtra os códigos do catálogo da Lighter. Pressione **Enter** para selecionar o primeiro resultado.
+
+
 ## Rodar a partir do código
 
 ```sh
@@ -33,14 +36,16 @@ python -m unittest -v
 
 ## Backtest de BTC · seis meses
 
-BTC/USDT da Binance Spot, de 24/05/2026 a 24/11/2026 às 00h de Brasília. Faixa EMA de 15 minutos, **US$ 100 de margem por operação a 10×** (US$ 1.000 de exposição inicial), sem reinvestir os lucros.
+BTC/USDT da Binance Spot, de 24/05 a 24/11/2026 às 00h de Brasília. Faixa EMA de 15 minutos, **US$ 100 de saldo inicial e de margem base**. Após lucro, a próxima margem incorpora o ganho realizado. Após perda, a meta volta a US$ 100. Cada entrada usa até o saldo disponível, sem aportes na simulação.
 
-| Custo por lado | P&L das operações fechadas | Short aberto no fim | P&L total | ROI médio por operação fechada |
-| --- | ---: | ---: | ---: | ---: |
-| 0,01% | +US$ 265,35 | +US$ 20,25 | **+US$ 285,60** | +0,83% |
-| 0,05% | +US$ 9,42 | +US$ 19,46 | **+US$ 28,88** | +0,03% |
+| Custo por lado | Alavancagem | Saldo final | ROI da conta | Queda máxima | Operações fechadas |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0,01% | 1× | US$ 127,00 | +27,00% | 17,88% | 320 |
+| 0,01% | 10× | US$ 77,63 | −22,37% | 25,19% | 6 |
+| 0,05% | 1× | US$ 82,82 | −17,18% | 25,05% | 284 |
+| 0,05% | 10× | US$ 77,19 | −22,81% | 25,05% | 4 |
 
-Foram **320 operações fechadas**. Com custo de 0,01% por lado, a melhor operação rendeu **US$ 197,92**, 103 operações foram lucrativas e a maior queda acumulada entre fechamentos de candle foi de **US$ 198,58**. O ROI médio usa a margem de cada ordem. Para obter o ROI da conta, é preciso definir o saldo inicial e a reserva para sustentar a estratégia. [Premissas, comparação a 1× e comando para reproduzir](knowledge/pt/BACKTEST.md)
+O teste usa uma trava de 25% sobre o pico do saldo. Ao atingir o limite no fechamento de 15 minutos, encerra a posição na abertura seguinte e pausa novas entradas. A queda pode ultrapassar o limite até o fechamento. Resultados sem trava e com stop individual estão nas [premissas e comandos](knowledge/pt/BACKTEST.md).
 
 ## Conectar o MCP local
 

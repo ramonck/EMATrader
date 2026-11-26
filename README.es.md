@@ -21,6 +21,9 @@ EMA Trader aplica la automatización al seguimiento del mercado y a la ejecució
 
 Para compilar y publicar una versión, abre **Actions → Compilar EMA Trader → Run workflow**. La acción crea la etiqueta y publica una Release con los cinco paquetes. [GitHub Actions](knowledge/es/RELEASE.md)
 
+**Buscar un activo.** Escribe `BTC` o `NVDA` en **Buscar activo**. La lista filtra los códigos del catálogo de Lighter. Pulsa **Enter** para seleccionar el primer resultado.
+
+
 ## Ejecutar desde el código
 
 ```sh
@@ -33,14 +36,16 @@ python -m unittest -v
 
 ## Backtest de BTC · seis meses
 
-BTC/USDT en Binance Spot, del 24/05/2026 al 24/11/2026 a las 03:00 UTC. Banda EMA de 15 minutos con **US$ 100 de margen por operación a 10×** (US$ 1.000 de exposición inicial), sin reinvertir las ganancias.
+BTC/USDT en Binance Spot, del 24/05/2026 al 24/11/2026 a las 03:00 UTC. Banda EMA de 15 minutos con **US$ 100 de saldo inicial y margen base**. Tras una ganancia, el siguiente margen incorpora el beneficio realizado. Tras una pérdida, el objetivo vuelve a US$ 100. Cada entrada se limita al saldo disponible, sin aportes.
 
-| Coste por lado | P&L de operaciones cerradas | Short abierto al final | P&L total | ROI promedio por operación cerrada |
-| --- | ---: | ---: | ---: | ---: |
-| 0,01% | +US$ 265,35 | +US$ 20,25 | **+US$ 285,60** | +0,83% |
-| 0,05% | +US$ 9,42 | +US$ 19,46 | **+US$ 28,88** | +0,03% |
+| Coste por lado | Apalancamiento | Saldo final | ROI de la cuenta | Caída máxima | Operaciones cerradas |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0,01% | 1× | US$ 127,00 | +27,00% | 17,88% | 320 |
+| 0,01% | 10× | US$ 77,63 | −22,37% | 25,19% | 6 |
+| 0,05% | 1× | US$ 82,82 | −17,18% | 25,05% | 284 |
+| 0,05% | 10× | US$ 77,19 | −22,81% | 25,05% | 4 |
 
-Se cerraron **320 operaciones**. Con un coste de 0,01% por lado, la mejor operación rindió **US$ 197,92**, hubo 103 operaciones ganadoras y la mayor caída entre cierres de vela fue de **US$ 198,58**. El ROI promedio usa el margen por orden. Para calcular el ROI de la cuenta, hacen falta el saldo inicial y la reserva para financiar la estrategia. [Supuestos, comparación a 1× y comandos para reproducir](knowledge/es/BACKTEST.md)
+La simulación usa un límite del 25% desde el máximo del saldo. Si se alcanza al cierre de 15 minutos, cierra en la siguiente apertura y bloquea nuevas entradas. La caída puede superar el límite antes de la salida. Consulta [supuestos y comandos](knowledge/es/BACKTEST.md) para ver las variantes sin protección y con stop individual.
 
 ## Conectar a MCP local
 

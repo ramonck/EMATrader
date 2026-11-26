@@ -221,14 +221,17 @@ class Monitor:
         self.market_state.update({symbol: (candles[-24:], points[-1])
                                   for symbol, (candles, points) in results.items()})
         orders = []
-        if managed and managed["symbol"] in results:
-            points = results[managed["symbol"]][1]
+        if managed:
+            points = results.get(managed["symbol"], (None, []))[1]
             signal = take_signal(points, self.cursor)
-            if signal:
+            if signal or managed.get("drawdown"):
                 try:
-                    result = protected_request(managed, command="rotate", candle=signal.time,
-                                               direction=signal.side, trigger="EMA 15m")
-                    self.cursor = signal.time
+                    if signal:
+                        result = protected_request(managed, command="rotate", candle=signal.time,
+                                                   direction=signal.side, trigger="EMA 15m")
+                        self.cursor = signal.time
+                    else:
+                        result = protected_request(managed, command="risk")
                     orders = result["actions"]
                     if result["paused"]:
                         self.managed = None
