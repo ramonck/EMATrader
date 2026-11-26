@@ -88,6 +88,7 @@ class LocalMCP:
                     "account_checked_ms": monitor.closed_at or None,
                     "positions": [row.copy() for row in monitor.position_rows[:12]],
                     "position_count": len(monitor.position_rows),
+                    "entry_retry_pending": bool(monitor.managed and monitor.entry_retry),
                     "execution_needs_review": bool(monitor.trade_error), "markets": markets}
         self.snapshot = (snapshot, candles)
 

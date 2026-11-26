@@ -185,6 +185,8 @@ class Monitor:
         self.last_action = None
         self.return_at = 0
         self.trade_error = ""
+        self.entry_retry = None
+        self.entry_retry_at = 0
         self.market_state = {}
         self.market_state_network = None
 
@@ -205,6 +207,7 @@ class Monitor:
         self.closed_at = now_ms()
         self.cursor = now_ms()
         self.trade_error = ""
+        self.entry_retry = None
 
     def snapshot(self, selected):
         self.last_action = None
@@ -232,20 +235,30 @@ class Monitor:
         if managed:
             points = results.get(managed["symbol"], (None, []))[1]
             signal = take_signal(points, self.cursor)
+            if signal or (points and self.entry_retry and points[-1].side != self.entry_retry.side):
+                self.entry_retry = None
+            if not signal and points and self.entry_retry and now_ms() >= self.entry_retry_at:
+                signal = self.entry_retry
             if signal or managed.get("drawdown"):
                 try:
                     if signal:
                         result = protected_request(managed, command="rotate", candle=signal.time,
-                                                   direction=signal.side, trigger="EMA 15m")
+                                                   direction=signal.side, trigger="EMA 15m",
+                                                   retry_entry=(signal is self.entry_retry))
                         self.cursor = signal.time
+                        self.entry_retry = signal if result.get("retry_entry") else None
+                        if self.entry_retry:
+                            self.entry_retry_at = now_ms() + RETRY * 1000
                     else:
                         result = protected_request(managed, command="risk")
                     orders = result["actions"]
                     if result["paused"]:
                         self.managed = None
+                        self.entry_retry = None
                         self.trade_error = result.get("reason") or "Execução pausada. Confira posição e diário."
                 except Exception as error:
                     self.managed = None
+                    self.entry_retry = None
                     self.trade_error = str(error)
         if self.account:
             try:

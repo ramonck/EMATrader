@@ -28,18 +28,26 @@ class AdoptionTests(unittest.TestCase):
                     "status": broker.PRICE_CANCEL}
         filled = dict(canceled, position="-1", filled="1", partial=False, status="filled")
         partial = dict(canceled, position="-0.1", filled="0.1")
-        for receipts, paused in (((canceled, filled), False), ((canceled, canceled), True), ((partial,), True),
+        for receipts, paused in (((canceled, filled), False), ((canceled, canceled), False), ((partial,), True),
                                  ((dict(canceled, status="canceled-invalid-balance"),), True)):
             with self.subTest(receipts=receipts), patch("broker.execute", AsyncMock(side_effect=receipts)) as execute:
                 result = asyncio.run(broker.connect(sdk, request, 1, 3, path))
                 self.assertEqual(execute.await_count, len(receipts))
                 self.assertEqual(result["actions"], list(receipts))
                 self.assertEqual(result["paused"], paused)
+                self.assertEqual(result["retry_entry"], receipts == (canceled, canceled))
                 if len(receipts) == 2:
                     self.assertEqual(execute.await_args.args[2], dict(request, only_open=True))
                     self.assertTrue(execute.await_args.kwargs["continue_rotation"])
                 if paused:
                     self.assertIn("Lighter", result["reason"])
+
+        deferred = dict(request, retry_entry=True)
+        with patch("broker.execute", AsyncMock(return_value=canceled)) as execute:
+            result = asyncio.run(broker.connect(sdk, deferred, 1, 3, path))
+        execute.assert_awaited_once_with(sdk, client, dict(deferred, only_open=True), 1, 3, path,
+                                         continue_rotation=True)
+        self.assertTrue(result["retry_entry"])
 
     def test_price_cancel_after_confirmed_close_requotes_the_new_entry(self):
         request = {"network": "testnet", "key": "test", "command": "rotate", "candle": 4, "direction": -1}

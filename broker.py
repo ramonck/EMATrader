@@ -207,6 +207,11 @@ async def execute(sdk, client, request, account, key_index, state_path, continue
     else:
         candle = int(request["candle"])
         raw_direction = int(request["direction"])
+    if request.get("retry_entry"):
+        last = state.get("last", {})
+        expected_action = "Abrir long" if raw_direction > 0 else "Abrir short"
+        if current or state["candle"] != candle or not retryable_entry(last) or last["action"] != expected_action:
+            raise BridgeError("O diário não confirma que esta abertura pode ser reenviada.")
     if raw_direction not in (-1, 1) or candle < state["candle"] or (
         candle == state["candle"] and not continue_rotation
     ):
@@ -376,7 +381,7 @@ async def connect(sdk, request, account, key_index, path):
     async def finish_entry(result, actions):
         if result.get("action"):
             actions.append(result)
-        if request["command"] == "rotate" and retryable_entry(result):
+        if request["command"] == "rotate" and not request.get("retry_entry") and retryable_entry(result):
             try:
                 retry = await execute(sdk, client, dict(request, only_open=True), account, key_index,
                                       path, continue_rotation=True)
@@ -388,12 +393,18 @@ async def connect(sdk, request, account, key_index, path):
             if retry.get("action") or retry.get("entry_skipped") or retry.get("risk_halt"):
                 result = retry
         reason = entry_pause_reason(result)
-        return {"actions": actions, "position": result["position"], "paused": bool(reason), "reason": reason}
+        retry = request["command"] == "rotate" and retryable_entry(result)
+        return {"actions": actions, "position": result["position"], "paused": bool(reason) and not retry,
+                "reason": reason, "retry_entry": retry}
 
     try:
         if client.check_client():
             raise BridgeError("A chave informada não corresponde à conta ou à rede da Lighter.")
-        result = await execute(sdk, client, request, account, key_index, path)
+        if request.get("retry_entry"):
+            result = await execute(sdk, client, dict(request, only_open=True), account, key_index,
+                                   path, continue_rotation=True)
+        else:
+            result = await execute(sdk, client, request, account, key_index, path)
         if request["command"] not in ("rotate", "risk"):
             return result
         risk_halt = result.get("risk_halt", False)

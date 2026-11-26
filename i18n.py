@@ -6,6 +6,12 @@ from string import Formatter
 LANGUAGES = {"pt": "Português", "en": "English", "es": "Español"}
 
 MESSAGES = {
+    "O diário não confirma que esta abertura pode ser reenviada.": (
+        "The journal does not confirm that this entry can be retried.",
+        "El registro no confirma que se pueda reintentar esta apertura."),
+    "Abertura cancelada por desvio de preço. Aguardando nova tentativa.": (
+        "Entry canceled for slippage. Waiting to retry.",
+        "Apertura cancelada por deslizamiento. Esperando para reintentar."),
     "A posição ainda não zerou. A abertura inversa ficou bloqueada.": (
         "The position is still open. The reverse entry was blocked.",
         "La posición sigue abierta. La entrada inversa quedó bloqueada."),

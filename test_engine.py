@@ -51,6 +51,35 @@ class EngineTests(unittest.TestCase):
             self.assertEqual(engine.shared_fetch(path, load, 30), [1, 2, 3])
             self.assertEqual(len(calls), 1)
 
+    def test_retry_waits_for_fresh_data_and_a_cooldown(self):
+        now = engine.now_ms()
+        short = Signal(now - engine.STEP, 101, 99, -1, -1, -1, -1, "AS")
+        grey = Signal(now, 101, 99, 0, 0, 0, -1, "")
+        long = Signal(now + engine.STEP, 101, 99, 1, 1, 1, 1, "FS / AL")
+        monitor = Monitor()
+        monitor.managed = {"symbol": "BTC"}
+        candle = Candle(now, 100, 101, 99, 100, 1)
+        canceled = {"actions": [], "paused": False, "retry_entry": True}
+        filled = {"actions": [], "paused": False, "retry_entry": False}
+        with (tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"EMA_TRADER_DATA_DIR": directory}),
+              patch("engine.candles_for", return_value=[candle]),
+              patch("engine.ema_scalping", side_effect=([short, grey], [short, grey], [short, grey], [short, grey, long])),
+              patch("engine.protected_request", side_effect=(canceled, canceled, filled)) as dispatch,
+              patch("engine.now_ms", return_value=now) as clock):
+            monitor.snapshot("BTC")
+            self.assertIs(monitor.entry_retry, short)
+            monitor.snapshot("BTC")
+            dispatch.assert_called_once()
+            clock.return_value += engine.RETRY * 1000
+            monitor.snapshot("BTC")
+            self.assertTrue(dispatch.call_args.kwargs["retry_entry"])
+            self.assertEqual(dispatch.call_args.kwargs["candle"], short.time)
+            clock.return_value = long.time
+            monitor.snapshot("BTC")
+            self.assertFalse(dispatch.call_args.kwargs["retry_entry"])
+            self.assertEqual(dispatch.call_args.kwargs["direction"], 1)
+            self.assertIsNone(monitor.entry_retry)
+
     def test_btc_uses_lighter_and_caches_by_network(self):
         now = 1_800_000_000_000
         def get(url, query=None):

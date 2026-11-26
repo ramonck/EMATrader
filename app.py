@@ -99,6 +99,8 @@ def run_cli(args, monitor, mcp):
                 print("\a", end="", flush=True)
         if monitor.trade_error:
             print(translate_error(language, monitor.trade_error), file=sys.stderr)
+        elif monitor.managed and monitor.entry_retry:
+            print(tr(language, "Abertura cancelada por desvio de preço. Aguardando nova tentativa."), file=sys.stderr)
         if errors:
             print(" | ".join(translate_error(language, error) for error in errors), file=sys.stderr)
         if args.once:
@@ -363,6 +365,8 @@ def gui(profile="DEFAULT", language=None):
         if monitor.managed and monitor.managed["symbol"] != selected.get():
             mode += " · " + t("Novas ordens neste gráfico estão bloqueadas.")
         messages = [message for message in [monitor.trade_error, *errors] if message]
+        if monitor.managed and monitor.entry_retry:
+            messages.insert(0, "Abertura cancelada por desvio de preço. Aguardando nova tentativa.")
         status.set(" · ".join([mode] + [translate_error(language, message) for message in messages]))
 
     def schedule(seconds):
@@ -521,6 +525,7 @@ def gui(profile="DEFAULT", language=None):
                         monitor.position_rows = []
                         monitor.closed_at = 0
                     monitor.managed = None
+                    monitor.entry_retry = None
                     monitor.account = network, idx
                     monitor.trade_error = ""
                 if mcp.port:
